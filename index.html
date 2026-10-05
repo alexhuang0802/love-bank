@@ -1,0 +1,493 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0b0b0d">
+<title>Private Bank 網銀</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,600&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: single-column phone banking app, max 440px, fixed bottom tab bar. Deliberately dark-only: a black-card bank. */
+:root {
+  --ink: #0b0b0d;          /* page */
+  --panel: #151518;        /* raised surfaces */
+  --line: #26262b;         /* hairlines */
+  --text: #ecebe6;         /* primary text */
+  --muted: #8d8b85;        /* secondary text */
+  --gold: #c9b17e;         /* champagne accent */
+  --plus: #9fd0a8;         /* credit */
+  --minus: #e4a199;        /* debit */
+  --f-display: "Bodoni Moda", "Times New Roman", serif;
+  --f-body: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--ink); color: var(--text); margin: 0; }
+:root { padding-top: env(safe-area-inset-top, 0px); }
+body { font-family: var(--f-body); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.app { max-width: 440px; margin: 0 auto; padding-inline: 18px; padding-block: 18px 110px; display: flex; flex-direction: column; gap: 22px; }
+
+/* Header */
+.top { display: flex; align-items: center; justify-content: space-between; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.mono { width: 34px; height: 34px; border: 1px solid var(--gold); border-radius: 50%; display: grid; place-items: center; font-family: var(--f-display); color: var(--gold); font-size: 17px; }
+.brand-name { font-family: var(--f-display); font-size: 15px; letter-spacing: .14em; text-transform: uppercase; }
+.bell { font-size: 12px; color: var(--muted); letter-spacing: .08em; }
+.hello { display: flex; flex-direction: column; gap: 2px; }
+.hello small { color: var(--muted); font-size: 13px; }
+.hello h1 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 30px; letter-spacing: .02em; }
+
+/* Card */
+.card-wrap { perspective: 900px; }
+.card { position: relative; aspect-ratio: 1.586; max-width: 100%; border-radius: 16px; padding: 20px 22px; overflow: hidden;
+  background: radial-gradient(120% 140% at 0% 0%, #2c2c31 0%, #121214 45%, #050506 100%);
+  box-shadow: 0 1px 0 rgba(255,255,255,.08) inset, 0 24px 48px -18px rgba(0,0,0,.9);
+  transform-style: preserve-3d; transition: transform .25s ease-out; display: flex; flex-direction: column; justify-content: space-between; }
+.card::before { content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(90deg, rgba(255,255,255,.018) 0 1px, transparent 1px 3px); }
+.card::after { content: ""; position: absolute; inset: -40%; pointer-events: none;
+  background: linear-gradient(115deg, transparent 40%, rgba(255,240,210,.13) 50%, transparent 60%);
+  transform: translateX(var(--shine, -30%)); transition: transform .25s ease-out; }
+.card-row { display: flex; justify-content: space-between; align-items: flex-start; position: relative; z-index: 1; }
+.card-tier { font-size: 10px; letter-spacing: .3em; color: var(--muted); text-transform: uppercase; }
+.card-j { font-family: var(--f-display); font-size: 40px; line-height: 1; color: var(--gold); }
+.chip { width: 38px; height: 28px; border-radius: 6px; background: linear-gradient(135deg, #d9c597, #8e7a4f); position: relative; }
+.chip::after { content: ""; position: absolute; inset: 6px 8px; border: 1px solid rgba(0,0,0,.25); border-radius: 3px; }
+.nfc { width: 18px; height: 18px; color: var(--muted); }
+.card-no { font-family: var(--f-mono); font-size: 15px; letter-spacing: .14em; position: relative; z-index: 1; }
+.card-holder { font-size: 11px; letter-spacing: .22em; color: var(--muted); text-transform: uppercase; }
+
+/* Balance */
+.balance { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border-radius: 14px; overflow: hidden; }
+.balance > div { background: var(--panel); padding: 14px 16px; display: flex; flex-direction: column; gap: 2px; }
+.label { font-size: 11px; letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+.big { font-family: var(--f-display); font-size: 28px; font-variant-numeric: tabular-nums; }
+.big small { font-family: var(--f-body); font-size: 12px; color: var(--muted); margin-left: 4px; }
+
+/* Two accounts: real fund + love points */
+.accts { display: flex; flex-direction: column; gap: 1px; background: var(--line); border-radius: 14px; overflow: hidden; }
+.acct { background: var(--panel); padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
+.acct-top { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.acct .sub { font-size: 12px; color: var(--muted); display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.acct .sub b { color: var(--text); font-weight: 400; font-family: var(--f-mono); }
+.cur { font-family: var(--f-body); font-size: 13px; color: var(--muted); margin-right: 4px; }
+.split { display: flex; height: 4px; border-radius: 2px; overflow: hidden; background: var(--line); }
+.split i { display: block; height: 100%; }
+.split .c { background: var(--gold); } .split .s { background: var(--plus); }
+.tag { font-size: 11px; color: var(--muted); border: 1px solid var(--line); border-radius: 99px; padding: 0 7px; margin-left: 6px; }
+.fresh { font-size: 11px; color: var(--muted); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+.seg button { padding: 8px; border-radius: 8px; font-size: 13px; color: var(--muted); }
+.seg button[aria-pressed="true"] { background: var(--line); color: var(--text); }
+.month { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.month > div { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.month .amt { font-size: 17px; }
+
+/* Quick actions */
+.quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.quick button { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); padding-block: 4px; }
+.quick .ico { width: 46px; height: 46px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; color: var(--gold); font-size: 18px; background: var(--panel); }
+
+/* Sections */
+.sec { display: flex; flex-direction: column; gap: 10px; }
+.sec-head { display: flex; justify-content: space-between; align-items: baseline; }
+.sec-head h2 { margin: 0; font-size: 16px; font-weight: 500; }
+.sec-head button { font-size: 13px; color: var(--gold); }
+.list { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.row { display: flex; align-items: center; gap: 12px; padding-block: 13px; border-bottom: 1px solid var(--line); }
+.row .meta { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.row .meta b { font-weight: 500; }
+.row .meta span { font-size: 12px; color: var(--muted); }
+.amt { font-family: var(--f-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.amt.plus { color: var(--plus); } .amt.minus { color: var(--minus); }
+
+/* Perks */
+.perks { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.perk { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; transition: border-color .2s; }
+.perk:hover { border-color: var(--gold); }
+.perk .em { font-size: 22px; }
+.perk b { font-weight: 500; font-size: 14px; line-height: 1.35; }
+.perk .cost { font-family: var(--f-mono); font-size: 13px; color: var(--gold); margin-top: auto; }
+.perk[disabled] { opacity: .45; cursor: not-allowed; }
+
+/* Vouchers */
+.pill { font-size: 11px; padding: 2px 8px; border-radius: 99px; border: 1px solid var(--gold); color: var(--gold); white-space: nowrap; }
+.pill.used { border-color: var(--line); color: var(--muted); }
+
+/* Tab bar */
+.tabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 5; background: rgba(11,11,13,.92); backdrop-filter: blur(12px); border-top: 1px solid var(--line);
+  padding: 8px 18px calc(8px + env(safe-area-inset-bottom, 0px)); }
+.tabs nav { max-width: 440px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); }
+.tabs button { padding: 8px 0; font-size: 12px; color: var(--muted); display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.tabs button .t-ico { font-size: 17px; }
+.tabs button[aria-current="page"] { color: var(--gold); }
+
+/* Sheet */
+.scrim { position: fixed; inset: 0; z-index: 20; background: rgba(0,0,0,.6); display: flex; align-items: flex-end; justify-content: center; }
+.sheet { width: 100%; max-width: 440px; background: var(--panel); border-radius: 20px 20px 0 0; border-top: 1px solid var(--line);
+  padding: 22px 20px calc(24px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 16px; max-height: 88vh; overflow-y: auto;
+  animation: up .28s ease-out; }
+@keyframes up { from { transform: translateY(30px); opacity: 0; } }
+.sheet h3 { margin: 0; font-size: 18px; font-weight: 500; }
+.sheet p { margin: 0; color: var(--muted); }
+.btn { padding: 13px 16px; border-radius: 12px; font-weight: 500; text-align: center; }
+.btn.pri { background: var(--gold); color: var(--ink); }
+.btn.ghost { border: 1px solid var(--line); }
+.btn.danger { border: 1px solid var(--minus); color: var(--minus); }
+.btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.kv { display: flex; justify-content: space-between; padding-block: 8px; border-bottom: 1px solid var(--line); font-size: 14px; }
+.kv span:first-child { color: var(--muted); }
+.ticket { border: 1px dashed var(--gold); border-radius: 14px; padding: 18px; text-align: center; display: flex; flex-direction: column; gap: 6px; }
+.ticket .code { font-family: var(--f-mono); font-size: 26px; letter-spacing: .2em; color: var(--gold); }
+input { width: 100%; background: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 12px; color: var(--text); font: inherit; }
+.field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
+
+/* Opening ceremony */
+.intro { position: fixed; inset: 0; z-index: 30; background: var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px; padding: 24px; text-align: center; }
+.intro .card { width: min(320px, 100%); animation: deal 1.1s cubic-bezier(.2,.8,.2,1); }
+@keyframes deal { from { transform: translateY(60px) rotateX(50deg); opacity: 0; } }
+.intro h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 28px; }
+.intro p { margin: 0; color: var(--muted); max-width: 30ch; }
+.toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 40; background: var(--text); color: var(--ink); padding: 10px 16px; border-radius: 99px; font-size: 14px; }
+.empty { color: var(--muted); font-size: 13px; padding-block: 12px; }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+
+<div class="app" id="app"></div>
+<div class="tabs"><nav id="tabs">
+  <button data-tab="home" aria-current="page"><span class="t-ico">◈</span>首頁</button>
+  <button data-tab="perks"><span class="t-ico">✦</span>權益兌換</button>
+  <button data-tab="history"><span class="t-ico">≡</span>交易紀錄</button>
+</nav></div>
+
+<script>
+/* ===== 改這裡就好 ===== */
+const CONFIG = {
+  bankName: "Alex Private Bank",
+  mono: "A",                       // 卡面字母
+  customer: "寶貝",                 // 首頁稱呼
+  holderEn: "MY ONLY CUSTOMER",     // 卡面持卡人
+  cardNo: "5208 •••• •••• 1314",
+  since: "2026/10/05",              // 開戶日
+  openingBonus: 13140,              // 開戶禮點數
+  limitText: "無上限",
+  pin: "0802",                      // 行員後台密碼（連點左上 logo 5 下）
+  perks: [
+    { id: "dish",    em: "🍽️", title: "免洗碗一次",           cost: 520 },
+    { id: "drink",   em: "🧋", title: "手搖飲外送到府",         cost: 199 },
+    { id: "bfast",   em: "🥐", title: "早餐送到床邊",           cost: 520 },
+    { id: "massage", em: "💆", title: "全身按摩 30 分鐘",       cost: 999 },
+    { id: "photo",   em: "📷", title: "專屬攝影師一日",         cost: 1200 },
+    { id: "dinner",  em: "🥂", title: "指定晚餐，我請客",       cost: 1314 },
+    { id: "shop",    em: "🛍️", title: "陪逛街一整天不催",       cost: 1500 },
+    { id: "peace",   em: "🕊️", title: "無條件和好券",           cost: 2000 },
+    { id: "boss",    em: "👑", title: "今天妳說了算",           cost: 3000 },
+    { id: "gift",    em: "🎁", title: "神秘驚喜禮物一份",       cost: 5200 },
+  ],
+};
+/* ===================== */
+
+const KEY = "private_bank_v1";
+const now = () => new Date().toISOString();
+function fresh() {
+  return { opened: false, balance: CONFIG.openingBonus,
+    txns: [{ id: "t0", at: now(), title: "生日開戶禮", note: "歡迎成為本行唯一客戶", amount: CONFIG.openingBonus }],
+    vouchers: [] };
+}
+let storageOk = true;
+function load() {
+  try { const s = localStorage.getItem(KEY); return s ? JSON.parse(s) : fresh(); }
+  catch (e) { storageOk = false; return fresh(); }
+}
+function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+let state = load();
+let tab = "home";
+
+const $ = (s, el = document) => el.querySelector(s);
+const fmt = n => n.toLocaleString("en-US");
+const pad = n => String(n).padStart(2, "0");
+const dt = iso => { const d = new Date(iso); return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
+const code = () => Array.from({ length: 6 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random()*32)]).join("");
+
+const cardHTML = () => `
+  <div class="card" id="card">
+    <div class="card-row"><span class="card-tier">Infinite · Private</span><span class="card-j">${esc(CONFIG.mono)}</span></div>
+    <div class="card-row" style="align-items:center"><span class="chip"></span>
+      <svg class="nfc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 6c2 3.5 2 8.5 0 12"/><path d="M12 4c3 4.5 3 11.5 0 16"/><path d="M16 2c4 5.5 4 14.5 0 20"/></svg></div>
+    <div class="card-row" style="flex-direction:column;gap:6px">
+      <span class="card-no">${esc(CONFIG.cardNo)}</span>
+      <span class="card-holder">${esc(CONFIG.holderEn)} · since ${esc(CONFIG.since)}</span>
+    </div>
+  </div>`;
+
+const txnRow = t => `<div class="row"><div class="meta"><b>${esc(t.title)}</b><span>${dt(t.at)}${t.note ? " · " + esc(t.note) : ""}</span></div>
+  <span class="amt ${t.amount >= 0 ? "plus" : "minus"}">${t.amount >= 0 ? "+" : "−"}${fmt(Math.abs(t.amount))}</span></div>`;
+
+const voucherRow = v => `<div class="row"><div class="meta"><b>${esc(v.title)}</b><span>憑證 ${v.code} · ${dt(v.at)}</span></div>
+  <span class="pill ${v.used ? "used" : ""}">${v.used ? "已使用" : "可使用"}</span></div>`;
+
+function renderHome() {
+  const unused = state.vouchers.filter(v => !v.used);
+  return `
+  <header class="top"><button class="brand" id="logo" aria-label="${esc(CONFIG.bankName)}"><span class="mono">${esc(CONFIG.mono)}</span><span class="brand-name">${esc(CONFIG.bankName)}</span></button>
+    <span class="bell">VIP 0001</span></header>
+  <div class="hello"><small>午安，本行唯一的客戶</small><h1>Hi, ${esc(CONFIG.customer)}</h1></div>
+  <div class="card-wrap">${cardHTML()}</div>
+  <div class="accts">
+    <div class="acct">${fundSummary()}</div>
+    <div class="acct">
+      <div class="acct-top"><span class="label">寵愛點數</span><span class="fresh">額度 ${esc(CONFIG.limitText)}</span></div>
+      <span class="big">${fmt(state.balance)}<small>pts</small></span>
+    </div>
+  </div>
+  <div class="quick">
+    <button data-go="perks"><span class="ico">✦</span>兌換權益</button>
+    <button data-go="history"><span class="ico">≡</span>交易紀錄</button>
+    <button id="q-vouch"><span class="ico">◇</span>我的憑證</button>
+    <button id="q-cs"><span class="ico">☏</span>專屬理專</button>
+  </div>
+  <section class="sec"><div class="sec-head"><h2>可使用的憑證</h2>${unused.length ? `<span class="label">${unused.length} 張</span>` : ""}</div>
+    <div class="list">${unused.length ? unused.slice(0, 3).map(voucherRow).join("") : `<div class="empty">還沒有兌換任何權益。到「權益兌換」挑一個吧。</div>`}</div></section>
+  ${fundSection()}
+  <section class="sec"><div class="sec-head"><h2>最近點數交易</h2><button data-go="history" data-hist="points">查看全部</button></div>
+    <div class="list">${state.txns.slice(0, 3).map(txnRow).join("")}</div></section>`;
+}
+
+/* ===== 真實帳戶（Notion ❤️❤️基金） ===== */
+let FUND = null, fundErr = false;
+const ntd = n => `<span class="cur">NT$</span>${fmt(Math.round(n))}`;
+const day = s => s.replaceAll("-", "/");
+function fundSummary() {
+  if (!FUND) return `<div class="acct-top"><span class="label">❤️❤️基金・總資產</span></div>
+    <span class="fresh">${fundErr ? "基金資料暫時讀不到，等等再打開看看。" : "正在讀取基金資料…"}</span>`;
+  const c = FUND.cash.balance, s = FUND.stockValue, t = c + s;
+  return `<div class="acct-top"><span class="label">${esc(FUND.fundName)}・總資產</span><span class="fresh">更新於 ${dt(FUND.updatedAt)}</span></div>
+    <span class="big">${ntd(t)}</span>
+    <div class="split" aria-hidden="true"><i class="c" style="width:${c / t * 100}%"></i><i class="s" style="width:${s / t * 100}%"></i></div>
+    <div class="sub"><span>現金 <b>${fmt(c)}</b></span><span>股票 <b>${fmt(s)}</b></span></div>`;
+}
+function fundSection() {
+  if (!FUND) return "";
+  const m = FUND.month;
+  return `<section class="sec"><div class="sec-head"><h2>基金 ${esc(m.label)} 收支</h2><button data-go="history" data-hist="fund">基金明細</button></div>
+    <div class="month">
+      <div><span class="label">收入</span><span class="amt plus">+${fmt(m.income)}</span></div>
+      <div><span class="label">支出</span><span class="amt minus">−${fmt(m.expense)}</span></div>
+    </div></section>
+  <section class="sec"><div class="sec-head"><h2>持股</h2><span class="label">市值 NT$</span></div>
+    <div class="list">${FUND.stocks.map(st => {
+      const pl = st.value - st.cost;
+      return `<div class="row"><div class="meta"><b>${esc(st.name)}<span class="tag">${esc(st.market)}</span></b>
+        <span>${fmt(st.shares)} 股 · ${st.fx > 1 ? "US$" : "$"}${st.price}</span></div>
+        <div style="text-align:right;display:flex;flex-direction:column"><span class="amt">${fmt(st.value)}</span>
+        <span class="amt ${pl >= 0 ? "plus" : "minus"}" style="font-size:12px">${pl >= 0 ? "+" : "−"}${fmt(Math.abs(pl))}</span></div></div>`;
+    }).join("")}</div></section>`;
+}
+const fundRow = t => `<div class="row"><div class="meta"><b>${esc(t.title)}${t.tag ? `<span class="tag">${esc(t.tag)}</span>` : ""}</b><span>${day(t.date)}</span></div>
+  <span class="amt ${t.amount >= 0 ? "plus" : "minus"}">${t.amount >= 0 ? "+" : "−"}${fmt(Math.abs(t.amount))}</span></div>`;
+/* ===== 密碼鎖：data.enc.json 用 PBKDF2 + AES-GCM 加密，密碼錯就解不開 ===== */
+const KEY_STORE = "private_bank_key";
+const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const tob64 = u8 => btoa(String.fromCharCode(...u8));
+let ENC = null;
+async function fetchEnc() {
+  const r = await fetch("data.enc.json", { cache: "no-store" });
+  if (!r.ok) throw new Error("no data");
+  return r.json();
+}
+async function decryptWith(key) {
+  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(ENC.iv) }, key, unb64(ENC.ct));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+async function keyFromPassword(pw) {
+  const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(pw), "PBKDF2", false, ["deriveKey"]);
+  return crypto.subtle.deriveKey({ name: "PBKDF2", salt: unb64(ENC.salt), iterations: ENC.iter, hash: "SHA-256" },
+    base, { name: "AES-GCM", length: 256 }, true, ["decrypt"]);
+}
+async function rememberedKey() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY_STORE) || "null");
+    if (!s || s.salt !== ENC.salt) return null;
+    return crypto.subtle.importKey("raw", unb64(s.raw), "AES-GCM", false, ["decrypt"]);
+  } catch (e) { return null; }
+}
+async function remember(key) {
+  try { localStorage.setItem(KEY_STORE, JSON.stringify({ salt: ENC.salt, raw: tob64(new Uint8Array(await crypto.subtle.exportKey("raw", key))) })); } catch (e) {}
+}
+function unlocked(data) {
+  FUND = data; $("#lock")?.remove(); render();
+  if (storageOk && !state.opened) intro();
+}
+function showLock(msg) {
+  const el = document.createElement("div"); el.className = "intro"; el.id = "lock";
+  el.innerHTML = `<span class="mono" style="width:56px;height:56px;font-size:28px">${esc(CONFIG.mono)}</span>
+    <h2>${esc(CONFIG.bankName)}</h2><p>本行僅服務一位客戶，請輸入網銀密碼。</p>
+    <form id="lock-form" style="display:flex;flex-direction:column;gap:12px;width:min(300px,100%)">
+      <input id="lock-pw" type="password" autocomplete="current-password" placeholder="網銀密碼" aria-label="網銀密碼">
+      <label style="display:flex;gap:8px;align-items:center;justify-content:center;font-size:13px;color:var(--muted)">
+        <input id="lock-keep" type="checkbox" checked style="width:auto"> 記住這支手機</label>
+      <button class="btn pri" id="lock-go">登入</button>
+      <span id="lock-msg" class="fresh" role="status">${msg || ""}</span>
+    </form>`;
+  document.body.appendChild(el);
+  const pw = $("#lock-pw", el), msgEl = $("#lock-msg", el), btn = $("#lock-go", el);
+  pw.focus();
+  $("#lock-form", el).addEventListener("submit", async e => {
+    e.preventDefault();
+    if (!pw.value) return;
+    btn.disabled = true; btn.textContent = "驗證中…"; msgEl.textContent = "";
+    try {
+      const key = await keyFromPassword(pw.value);
+      const data = await decryptWith(key);
+      if ($("#lock-keep", el).checked) await remember(key);
+      unlocked(data);
+    } catch (err) {
+      msgEl.textContent = "密碼不對，再試一次。"; pw.value = ""; pw.focus();
+      btn.disabled = false; btn.textContent = "登入";
+    }
+  });
+}
+async function boot() {
+  try { ENC = await fetchEnc(); }
+  catch (e) { fundErr = true; showLock("目前讀不到帳戶資料，請稍後再試。"); return; }
+  const k = await rememberedKey();
+  if (k) { try { return unlocked(await decryptWith(k)); } catch (e) { try { localStorage.removeItem(KEY_STORE); } catch (_) {} } }
+  showLock();
+}
+
+function renderPerks() {
+  return `
+  <div class="hello"><small>可用點數 ${fmt(state.balance)} pts</small><h1>卡友權益</h1></div>
+  <div class="perks">${CONFIG.perks.map(p => `
+    <button class="perk" data-perk="${p.id}" ${p.cost > state.balance ? "disabled" : ""}>
+      <span class="em">${p.em}</span><b>${esc(p.title)}</b><span class="cost">${fmt(p.cost)} pts</span></button>`).join("")}</div>`;
+}
+
+let hist = "fund";
+function renderHistory() {
+  const seg = `<div class="seg" role="group" aria-label="帳戶">
+    <button data-hist="fund" aria-pressed="${hist === "fund"}">❤️❤️基金</button>
+    <button data-hist="points" aria-pressed="${hist === "points"}">寵愛點數</button></div>`;
+  if (hist === "fund") return `
+  <div class="hello"><small>${FUND ? "同步自 Notion・" + dt(FUND.updatedAt) : "Notion"}</small><h1>交易紀錄</h1></div>${seg}
+  <section class="sec"><div class="sec-head"><h2>基金收支</h2>${FUND ? `<span class="label">最近 ${FUND.txns.length} 筆</span>` : ""}</div>
+    <div class="list">${FUND ? FUND.txns.map(fundRow).join("") : `<div class="empty">${fundErr ? "基金資料暫時讀不到。" : "正在讀取…"}</div>`}</div></section>
+  ${FUND ? `<div class="kv"><span>累計收入</span><span class="amt plus">+${fmt(FUND.cash.income)}</span></div>
+  <div class="kv"><span>累計支出</span><span class="amt minus">−${fmt(FUND.cash.expense)}</span></div>` : ""}`;
+  return `
+  <div class="hello"><small>${esc(CONFIG.cardNo)}</small><h1>交易紀錄</h1></div>${seg}
+  <section class="sec"><div class="sec-head"><h2>兌換憑證</h2></div>
+    <div class="list">${state.vouchers.length ? state.vouchers.map(voucherRow).join("") : `<div class="empty">還沒有兌換紀錄。</div>`}</div></section>
+  <section class="sec"><div class="sec-head"><h2>點數明細</h2></div>
+    <div class="list">${state.txns.map(txnRow).join("")}</div></section>`;
+}
+
+function render() {
+  $("#app").innerHTML = tab === "perks" ? renderPerks() : tab === "history" ? renderHistory() : renderHome();
+  document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === tab ? "page" : "false"));
+  bindCardTilt();
+}
+function go(t) { tab = t; render(); window.scrollTo(0, 0); }
+
+function bindCardTilt() {
+  const c = $("#card"); if (!c || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const move = (x, y) => { const r = c.getBoundingClientRect(); const px = (x - r.left) / r.width - .5, py = (y - r.top) / r.height - .5;
+    c.style.transform = `rotateY(${px * 14}deg) rotateX(${-py * 14}deg)`; c.style.setProperty("--shine", `${px * 60}%`); };
+  c.addEventListener("pointermove", e => move(e.clientX, e.clientY));
+  c.addEventListener("pointerleave", () => { c.style.transform = ""; c.style.setProperty("--shine", "-30%"); });
+}
+
+function toast(msg) { const t = document.createElement("div"); t.className = "toast"; t.textContent = msg; document.body.appendChild(t); setTimeout(() => t.remove(), 2200); }
+function sheet(html, bind) {
+  const s = document.createElement("div"); s.className = "scrim"; s.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${html}</div>`;
+  s.addEventListener("click", e => { if (e.target === s || e.target.closest("[data-close]")) s.remove(); });
+  document.body.appendChild(s); bind && bind(s); return s;
+}
+
+function redeem(p) {
+  sheet(`<h3>${p.em} ${esc(p.title)}</h3>
+    <div><div class="kv"><span>扣除點數</span><span class="amt minus">−${fmt(p.cost)}</span></div>
+    <div class="kv"><span>兌換後餘額</span><span class="amt">${fmt(state.balance - p.cost)}</span></div></div>
+    <p>兌換後會產生一張憑證，出示給本行行員即可使用。</p>
+    <div class="btns"><button class="btn ghost" data-close>再想想</button><button class="btn pri" id="ok">確認兌換</button></div>`, s => {
+    $("#ok", s).onclick = () => {
+      const v = { id: "v" + Date.now(), perkId: p.id, title: p.title, code: code(), at: now(), used: false };
+      state.balance -= p.cost; state.vouchers.unshift(v);
+      state.txns.unshift({ id: "t" + Date.now(), at: v.at, title: "兌換・" + p.title, note: "憑證 " + v.code, amount: -p.cost });
+      save(); render(); s.remove(); showVoucher(v);
+    };
+  });
+}
+function showVoucher(v) {
+  sheet(`<h3>兌換成功</h3><div class="ticket"><span class="label">${esc(CONFIG.bankName)} 權益憑證</span><b>${esc(v.title)}</b>
+    <span class="code">${v.code}</span><span class="label">${dt(v.at)}</span></div>
+    <p>截圖或直接把這個畫面給他看，他就必須照辦。</p><button class="btn pri" data-close>收下</button>`);
+}
+
+/* 行員後台 */
+let taps = 0, tapTimer;
+function logoTap() { taps++; clearTimeout(tapTimer); tapTimer = setTimeout(() => taps = 0, 1200); if (taps >= 5) { taps = 0; askPin(); } }
+function askPin() {
+  sheet(`<h3>行員登入</h3><label class="field">行員密碼<input id="pin" type="password" inputmode="numeric" autocomplete="off"></label>
+    <div class="btns"><button class="btn ghost" data-close>取消</button><button class="btn pri" id="go">登入</button></div>`, s => {
+    const i = $("#pin", s); i.focus();
+    const tryIt = () => { if (i.value === CONFIG.pin) { s.remove(); admin(); } else { i.value = ""; i.placeholder = "密碼錯誤"; } };
+    $("#go", s).onclick = tryIt; i.onkeydown = e => e.key === "Enter" && tryIt();
+  });
+}
+function admin() {
+  const unused = state.vouchers.filter(v => !v.used);
+  sheet(`<h3>行員後台</h3>
+    <label class="field">撥入點數<input id="a-pts" type="number" inputmode="numeric" placeholder="例如 520"></label>
+    <label class="field">備註<input id="a-note" type="text" placeholder="例如 今天很乖獎勵"></label>
+    <button class="btn pri" id="a-add">撥入</button>
+    <div class="sec"><div class="sec-head"><h2>核銷憑證</h2></div><div class="list">${unused.length ? unused.map(v => `
+      <div class="row"><div class="meta"><b>${esc(v.title)}</b><span>${v.code}</span></div><button class="pill" data-use="${v.id}">核銷</button></div>`).join("") : `<div class="empty">目前沒有待核銷的憑證。</div>`}</div></div>
+    <button class="btn danger" id="a-reset">重置所有資料</button>
+    <button class="btn ghost" data-close>離開後台</button>`, s => {
+    $("#a-add", s).onclick = () => {
+      const n = parseInt($("#a-pts", s).value, 10); if (!n) return;
+      state.balance += n; state.txns.unshift({ id: "t" + Date.now(), at: now(), title: n > 0 ? "行員撥入" : "行員調整", note: $("#a-note", s).value.trim(), amount: n });
+      save(); render(); s.remove(); toast(`已撥入 ${fmt(n)} 點`);
+    };
+    s.querySelectorAll("[data-use]").forEach(b => b.onclick = () => {
+      const v = state.vouchers.find(x => x.id === b.dataset.use); v.used = true; save(); render(); s.remove(); admin(); toast("已核銷");
+    });
+    const r = $("#a-reset", s); r.onclick = () => {
+      if (r.dataset.armed) { state = fresh(); state.opened = true; save(); render(); s.remove(); toast("已重置"); }
+      else { r.dataset.armed = 1; r.textContent = "再按一次確認重置"; }
+    };
+  });
+}
+
+/* 開卡儀式 */
+function intro() {
+  const el = document.createElement("div"); el.className = "intro";
+  el.innerHTML = `${cardHTML()}<h2>生日快樂，${esc(CONFIG.customer)}</h2>
+    <p>${esc(CONFIG.bankName)} 今天正式開業，全行只服務一位客戶。開戶禮 ${fmt(CONFIG.openingBonus)} 點已入帳。</p>
+    <button class="btn pri" id="activate" style="min-width:200px">啟用我的卡片</button>`;
+  document.body.appendChild(el);
+  $("#activate", el).onclick = () => { state.opened = true; save(); el.remove(); toast("卡片已啟用"); };
+}
+
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-perk],#logo,#q-vouch,#q-cs"); if (!t) return;
+  if (t.dataset.hist) { hist = t.dataset.hist; if (!t.dataset.go) { render(); return; } }
+  if (t.dataset.tab) go(t.dataset.tab);
+  else if (t.dataset.go) go(t.dataset.go);
+  else if (t.dataset.perk) redeem(CONFIG.perks.find(p => p.id === t.dataset.perk));
+  else if (t.id === "logo") logoTap();
+  else if (t.id === "q-vouch") { hist = "points"; go("history"); }
+  else if (t.id === "q-cs") sheet(`<h3>專屬理專</h3><p>本行理專 24 小時待命，回覆速度視理專是否在打電動而定。</p>
+    <div class="kv"><span>服務時間</span><span>全年無休</span></div><div class="kv"><span>服務態度</span><span>永遠五星</span></div>
+    <button class="btn pri" data-close>好的</button>`);
+});
+
+render();
+boot();
+</script>
