@@ -99,4 +99,5 @@ const iv = crypto.getRandomValues(new Uint8Array(12));
 const ct = new Uint8Array(await subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(JSON.stringify(data))));
 await writeFile(OUT, JSON.stringify({ v: 1, iter: 250000, salt: b64(salt), iv: b64(iv), ct: b64(ct) }) + "\n");
 
-console.log(`總資產 ${data.total.toLocaleString()}｜現金 ${cash.balance.toLocaleString()}｜股票 ${stockValue.toLocaleString()}｜${txns.length} 筆明細`);
+// repo 是公開的，執行紀錄任何人都看得到：只印筆數，絕不印金額
+console.log(`同步完成：${income.length + expense.length} 筆收支、${stocks.length} 檔股票`);
