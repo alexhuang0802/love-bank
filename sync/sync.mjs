@@ -71,9 +71,21 @@ const month = { label: ym.replace("-", "/"), income: sum(inMonth(income)), expen
 const txns = [...income, ...expense].filter(t => t.date)
   .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
 
+// 分類統計：每月 × 每個分類的金額（正數），給「收支分析」頁用
+const byMonth = {};
+for (const [kind, rows] of [["income", income], ["expense", expense]]) {
+  for (const t of rows) {
+    if (!t.date) continue;
+    const m = (byMonth[t.date.slice(0, 7)] ??= { income: {}, expense: {} })[kind];
+    const k = t.tag || "未分類";
+    m[k] = (m[k] ?? 0) + Math.abs(t.amount);
+  }
+}
+
 const data = {
   updatedAt: new Date().toISOString(), fundName: "❤️❤️基金",
   cash, month, stocks, stockValue, total: cash.balance + stockValue, txns,
+  stats: { byMonth },
 };
 
 // 加密：PBKDF2(SHA-256, 250k) → AES-GCM。salt 沿用舊檔，讓手機記住的金鑰持續有效。
