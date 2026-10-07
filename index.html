@@ -258,7 +258,7 @@ function renderHome() {
   const unused = state.vouchers.filter(v => !v.used);
   return `
   <header class="top"><button class="brand" id="logo" aria-label="${esc(CONFIG.bankName)}"><span class="mono">${esc(CONFIG.mono)}</span><span class="brand-name">${esc(CONFIG.bankName)}</span></button>
-    <span class="bell">VIP 0001</span></header>
+    <button class="bell" id="logout" aria-label="登出網銀">登出</button></header>
   <div class="hello"><small>午安，本行唯一的客戶</small><h1>Hi, ${esc(CONFIG.customer)}</h1></div>
   <div class="card-wrap">${cardHTML()}</div>
   <div class="accts">
@@ -555,8 +555,9 @@ function intro() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-perk],#logo,#q-vouch,#q-cs"); if (!t) return;
+  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-perk],#logo,#logout,#q-vouch,#q-cs"); if (!t) return;
   if (t.dataset.range) { statRange = t.dataset.range; render(); return; }
+  if (t.id === "logout") { try { localStorage.removeItem(KEY_STORE); } catch (_) {} location.reload(); return; }
   if (t.dataset.hist) { hist = t.dataset.hist; if (!t.dataset.go) { render(); return; } }
   if (t.dataset.tab) go(t.dataset.tab);
   else if (t.dataset.go) go(t.dataset.go);
