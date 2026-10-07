@@ -2,7 +2,7 @@ name: 同步 ❤️❤️基金
 
 on:
   schedule:
-    - cron: "0 1 * * *"   # 每天台灣時間 09:00
+    - cron: "0 1 * * *"   # 每天台灣時間 09:00（GitHub 排程常會延遲）
   workflow_dispatch:
 
 permissions:
@@ -16,6 +16,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: 安裝圖片壓縮工具
+        run: npm install --no-save --no-package-lock sharp@0.33.5
       - run: node sync/sync.mjs
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
@@ -25,5 +27,6 @@ jobs:
           git config user.name "love-bank-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data.enc.json
+          git add -A img
           git diff --cached --quiet || git commit -m "sync: $(date -u +%F)"
           git push

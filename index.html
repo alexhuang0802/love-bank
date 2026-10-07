@@ -163,6 +163,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .kv { display: flex; justify-content: space-between; padding-block: 8px; border-bottom: 1px solid var(--line); font-size: 14px; }
 .kv span:first-child { color: var(--muted); }
+.row-btn { width: 100%; text-align: left; cursor: pointer; }
+.row-btn:hover .meta b { color: var(--gold); }
+.clip { font-size: 12px; margin-left: 6px; }
+.gallery { display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x mandatory; margin-inline: -4px; padding: 4px; }
+.shot { flex: 0 0 100%; margin: 0; scroll-snap-align: center; min-height: 200px; display: grid; place-items: center; background: var(--ink); border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.shot img { width: 100%; max-height: 62vh; object-fit: contain; display: block; }
 .ticket { border: 1px dashed var(--gold); border-radius: 14px; padding: 18px; text-align: center; display: flex; flex-direction: column; gap: 6px; }
 .ticket .code { font-family: var(--f-mono); font-size: 26px; letter-spacing: .2em; color: var(--gold); }
 input { width: 100%; background: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 12px; color: var(--text); font: inherit; }
@@ -311,8 +317,35 @@ function fundSection() {
         <span class="amt ${pl >= 0 ? "plus" : "minus"}" style="font-size:12px">${pl >= 0 ? "+" : "−"}${fmt(Math.abs(pl))}</span></div></div>`;
     }).join("")}</div></section>`;
 }
-const fundRow = t => `<div class="row"><div class="meta"><b>${esc(t.title)}${t.tag ? `<span class="tag">${esc(t.tag)}</span>` : ""}</b><span>${day(t.date)}</span></div>
-  <span class="amt ${t.amount >= 0 ? "plus" : "minus"}">${t.amount >= 0 ? "+" : "−"}${fmt(Math.abs(t.amount))}</span></div>`;
+const fundRow = (t, i) => {
+  const inner = `<div class="meta"><b>${esc(t.title)}${t.tag ? `<span class="tag">${esc(t.tag)}</span>` : ""}${t.imgs?.length ? `<span class="clip" aria-label="${t.imgs.length} 張圖片">📎${t.imgs.length > 1 ? t.imgs.length : ""}</span>` : ""}</b><span>${day(t.date)}</span></div>
+  <span class="amt ${t.amount >= 0 ? "plus" : "minus"}">${t.amount >= 0 ? "+" : "−"}${fmt(Math.abs(t.amount))}</span>`;
+  return t.imgs?.length ? `<button class="row row-btn" data-txn="${i}">${inner}</button>` : `<div class="row">${inner}</div>`;
+};
+
+/* ===== 交易圖片：img/*.enc 用同一把金鑰加密（前 12 bytes 是 IV），點開才下載解密 ===== */
+let CUR_KEY = null;
+async function loadImage(path) {
+  const r = await fetch(path, { cache: "force-cache" });
+  if (!r.ok) throw new Error("img");
+  const buf = new Uint8Array(await r.arrayBuffer());
+  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: buf.slice(0, 12) }, CUR_KEY, buf.slice(12));
+  return URL.createObjectURL(new Blob([pt], { type: "image/jpeg" }));
+}
+function showImages(t) {
+  const urls = [];
+  const s = sheet(`<h3>${esc(t.title)}</h3>
+    <p>${day(t.date)}・<span class="amt ${t.amount >= 0 ? "plus" : "minus"}">${t.amount >= 0 ? "+" : "−"}${fmt(Math.abs(t.amount))}</span></p>
+    <div class="gallery">${t.imgs.map((_, i) => `<figure class="shot" data-i="${i}"><span class="fresh">圖片解密中…</span></figure>`).join("")}</div>
+    ${t.imgs.length > 1 ? `<span class="fresh" style="text-align:center">左右滑動看 ${t.imgs.length} 張</span>` : ""}
+    <button class="btn ghost" data-close>關閉</button>`);
+  t.imgs.forEach(async (p, i) => {
+    const fig = s.querySelector(`.shot[data-i="${i}"]`);
+    try { const u = await loadImage(p); urls.push(u); fig.innerHTML = `<img src="${u}" alt="${esc(t.title)} 第 ${i + 1} 張">`; }
+    catch (e) { fig.innerHTML = `<span class="fresh">這張圖片讀不到，等下次同步再試。</span>`; }
+  });
+  new MutationObserver((_, o) => { if (!s.isConnected) { urls.forEach(URL.revokeObjectURL); o.disconnect(); } }).observe(document.body, { childList: true });
+}
 /* ===== 密碼鎖：data.enc.json 用 PBKDF2 + AES-GCM 加密，密碼錯就解不開 ===== */
 const KEY_STORE = "private_bank_key";
 const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
@@ -325,6 +358,7 @@ async function fetchEnc() {
 }
 async function decryptWith(key) {
   const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: unb64(ENC.iv) }, key, unb64(ENC.ct));
+  CUR_KEY = key;
   return JSON.parse(new TextDecoder().decode(pt));
 }
 async function keyFromPassword(pw) {
@@ -555,8 +589,9 @@ function intro() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-perk],#logo,#logout,#q-vouch,#q-cs"); if (!t) return;
+  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-txn],[data-perk],#logo,#logout,#q-vouch,#q-cs"); if (!t) return;
   if (t.dataset.range) { statRange = t.dataset.range; render(); return; }
+  if (t.dataset.txn) { showImages(FUND.txns[Number(t.dataset.txn)]); return; }
   if (t.id === "logout") { try { localStorage.removeItem(KEY_STORE); } catch (_) {} location.reload(); return; }
   if (t.dataset.hist) { hist = t.dataset.hist; if (!t.dataset.go) { render(); return; } }
   if (t.dataset.tab) go(t.dataset.tab);
