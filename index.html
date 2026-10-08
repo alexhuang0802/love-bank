@@ -206,6 +206,7 @@ const CONFIG = {
   openingBonus: 5201314,            // 開戶禮點數（改這裡，已開戶的手機也會自動補差額）
   limitText: "無上限",
   pin: "0802",                      // 行員後台密碼（連點左上 logo 5 下）
+  pointsApi: "",                    // 雲端點數 API（Vercel 部署好後填 https://xxx.vercel.app/api/points），空白 = 只存在這支手機
   perks: [
     { id: "dish",    em: "🍽️", title: "免洗碗一次",           cost: 520 },
     { id: "drink",   em: "🧋", title: "手搖飲外送到府",         cost: 199 },
@@ -380,7 +381,7 @@ async function rememberedKey() {
   try {
     const s = JSON.parse(localStorage.getItem(KEY_STORE) || "null");
     if (!s || s.salt !== ENC.salt) return null;
-    return crypto.subtle.importKey("raw", unb64(s.raw), "AES-GCM", false, ["decrypt"]);
+    return crypto.subtle.importKey("raw", unb64(s.raw), "AES-GCM", true, ["decrypt"]);
   } catch (e) { return null; }
 }
 async function remember(key) {
@@ -389,6 +390,39 @@ async function remember(key) {
 function unlocked(data) {
   FUND = data; $("#lock")?.remove(); render();
   if (storageOk && !state.opened) intro();
+  syncPoints();
+}
+
+/* ===== 雲端點數：紀錄存在 Notion「💝 寵愛點數」，經 CONFIG.pointsApi 讀寫 =====
+   驗證用金鑰的 SHA-256（proof），伺服器用同一組密碼算出來比對，密碼本身不離開手機 */
+let PROOF = null;
+const cloud = () => !!(CONFIG.pointsApi && PROOF);
+async function makeProof() {
+  const raw = new Uint8Array(await crypto.subtle.exportKey("raw", CUR_KEY));
+  PROOF = tob64(new Uint8Array(await crypto.subtle.digest("SHA-256", raw)));
+}
+async function pointsCall(body) {
+  const r = await fetch(CONFIG.pointsApi, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ proof: PROOF, ...body }) });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) { const e = new Error(j.error || "failed"); e.status = r.status; throw e; }
+  return j;
+}
+function applyCloud(j) {
+  const t0 = state.txns.find(t => t.id === "t0");
+  state.balance = j.balance;
+  state.txns = [
+    ...j.rows.map(r => r.type === "兌換"
+      ? { id: r.id, at: r.at, title: "兌換・" + r.title, note: "憑證 " + r.code, amount: r.amount }
+      : { id: r.id, at: r.at, title: r.title, note: r.note, amount: r.amount }),
+    { id: "t0", at: t0?.at || now(), title: "生日開戶禮", note: "歡迎成為本行唯一客戶", amount: j.opening },
+  ];
+  state.vouchers = j.rows.filter(r => r.type === "兌換").map(r => ({ id: r.id, perkId: r.perkId, title: r.title, code: r.code, at: r.at, used: r.used }));
+  save(); render();
+}
+async function syncPoints() {
+  if (!CONFIG.pointsApi || !CUR_KEY) return;
+  try { if (!PROOF) await makeProof(); applyCloud(await pointsCall({})); }
+  catch (e) { toast("點數暫時連不上雲端，先顯示這支手機上的紀錄"); }
 }
 // 登入畫面 logo：房子外框裡放粗體字母，右邊幾疊綁好的鈔票
 // 一疊鈔票：外框 + 每 4px 一條鈔票邊 + 中間一條金色綁帶，底部對齊 y=92
@@ -553,7 +587,18 @@ function redeem(p) {
     <div class="kv"><span>兌換後餘額</span><span class="amt">${fmt(state.balance - p.cost)}</span></div></div>
     <p>兌換後會產生一張憑證，出示給本行行員即可使用。</p>
     <div class="btns"><button class="btn ghost" data-close>再想想</button><button class="btn pri" id="ok">確認兌換</button></div>`, s => {
-    $("#ok", s).onclick = () => {
+    $("#ok", s).onclick = async () => {
+      if (cloud()) {
+        const b = $("#ok", s); b.disabled = true; b.textContent = "兌換中…";
+        try {
+          const { voucher } = await pointsCall({ action: "redeem", perkId: p.id, title: p.title, cost: p.cost });
+          await syncPoints(); s.remove(); showVoucher(voucher);
+        } catch (e) {
+          toast(e.status === 409 ? "點數不夠喔" : "連不上銀行，請稍後再試");
+          b.disabled = false; b.textContent = "確認兌換";
+        }
+        return;
+      }
       const v = { id: "v" + Date.now(), perkId: p.id, title: p.title, code: code(), at: now(), used: false };
       state.balance -= p.cost; state.vouchers.unshift(v);
       state.txns.unshift({ id: "t" + Date.now(), at: v.at, title: "兌換・" + p.title, note: "憑證 " + v.code, amount: -p.cost });
@@ -586,17 +631,29 @@ function admin() {
     <button class="btn pri" id="a-add">撥入</button>
     <div class="sec"><div class="sec-head"><h2>核銷憑證</h2></div><div class="list">${unused.length ? unused.map(v => `
       <div class="row"><div class="meta"><b>${esc(v.title)}</b><span>${v.code}</span></div><button class="pill" data-use="${v.id}">核銷</button></div>`).join("") : `<div class="empty">目前沒有待核銷的憑證。</div>`}</div></div>
-    <button class="btn danger" id="a-reset">重置所有資料</button>
+    ${cloud() ? `<p>點數存在雲端（Notion「💝 寵愛點數」），要刪紀錄請到 Notion 操作。</p>` : `<button class="btn danger" id="a-reset">重置所有資料</button>`}
     <button class="btn ghost" data-close>離開後台</button>`, s => {
-    $("#a-add", s).onclick = () => {
+    $("#a-add", s).onclick = async () => {
       const n = parseInt($("#a-pts", s).value, 10); if (!n) return;
-      state.balance += n; state.txns.unshift({ id: "t" + Date.now(), at: now(), title: n > 0 ? "行員撥入" : "行員調整", note: $("#a-note", s).value.trim(), amount: n });
+      const note = $("#a-note", s).value.trim();
+      if (cloud()) {
+        try { await pointsCall({ action: "grant", amount: n, note }); await syncPoints(); s.remove(); toast(`已撥入 ${fmt(n)} 點`); }
+        catch (e) { toast("連不上銀行，請稍後再試"); }
+        return;
+      }
+      state.balance += n; state.txns.unshift({ id: "t" + Date.now(), at: now(), title: n > 0 ? "行員撥入" : "行員調整", note, amount: n });
       save(); render(); s.remove(); toast(`已撥入 ${fmt(n)} 點`);
     };
-    s.querySelectorAll("[data-use]").forEach(b => b.onclick = () => {
+    s.querySelectorAll("[data-use]").forEach(b => b.onclick = async () => {
+      if (cloud()) {
+        b.disabled = true;
+        try { await pointsCall({ action: "use", id: b.dataset.use }); await syncPoints(); s.remove(); admin(); toast("已核銷"); }
+        catch (e) { b.disabled = false; toast("連不上銀行，請稍後再試"); }
+        return;
+      }
       const v = state.vouchers.find(x => x.id === b.dataset.use); v.used = true; save(); render(); s.remove(); admin(); toast("已核銷");
     });
-    const r = $("#a-reset", s); r.onclick = () => {
+    const r = $("#a-reset", s); if (r) r.onclick = () => {
       if (r.dataset.armed) { state = fresh(); state.opened = true; save(); render(); s.remove(); toast("已重置"); }
       else { r.dataset.armed = 1; r.textContent = "再按一次確認重置"; }
     };
