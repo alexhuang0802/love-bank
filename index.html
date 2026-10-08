@@ -206,7 +206,7 @@ const CONFIG = {
   openingBonus: 5201314,            // 開戶禮點數（改這裡，已開戶的手機也會自動補差額）
   limitText: "無上限",
   pin: "0802",                      // 行員後台密碼（連點左上 logo 5 下）
-  pointsApi: "",                    // 雲端點數 API（Vercel 部署好後填 https://xxx.vercel.app/api/points），空白 = 只存在這支手機
+  pointsApi: "https://love-bank-murex.vercel.app/api/points",                  // 雲端點數 API（Vercel 部署好後填 https://xxx.vercel.app/api/points），空白 = 只存在這支手機
   perks: [
     { id: "dish",    em: "🍽️", title: "免洗碗一次",           cost: 520 },
     { id: "drink",   em: "🧋", title: "手搖飲外送到府",         cost: 199 },
