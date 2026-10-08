@@ -12,6 +12,7 @@ const TEMPLATE_ROWS = new Set(["Acme Inc. Salary", "Emca Inc. Salary", "Divident
 const OUT = new URL("../data.enc.json", import.meta.url);
 const IMG_DIR = new URL("../img/", import.meta.url);
 const MAX_IMGS_PER_TXN = 6;
+const PHOTO_PAGE = "3f38718e-66c1-813c-8485-fbe4bded33c3"; // Notion「📷 網銀照片」：第一張是開卡畫面的合照
 
 const { NOTION_TOKEN, BANK_PASSWORD } = process.env;
 if (!NOTION_TOKEN || !BANK_PASSWORD) throw new Error("缺少 NOTION_TOKEN 或 BANK_PASSWORD");
@@ -130,10 +131,9 @@ async function shrink(buf) {
 await mkdir(IMG_DIR, { recursive: true });
 const imageIndex = {};   // `${blockId}@${edited}` → 檔名（存在加密資料裡，公開 repo 看不出對應哪筆）
 let imgCount = 0;
-for (const t of recent) {
-  const blocks = await pageImages(t.id);
+async function encryptImages(pageId) {
   const files = [];
-  for (const b of blocks) {
+  for (const b of await pageImages(pageId)) {
     const k = `${b.id}@${b.edited}`;
     let name = prevImages[k];
     if (!name) {
@@ -147,8 +147,13 @@ for (const t of recent) {
     files.push(`img/${name}`);
     imgCount++;
   }
+  return files;
+}
+for (const t of recent) {
+  const files = await encryptImages(t.id);
   if (files.length) t.imgs = files;
 }
+const photos = await encryptImages(PHOTO_PAGE);
 // 不再使用的圖片刪掉
 const keep = new Set(Object.values(imageIndex));
 for (const f of await readdir(IMG_DIR)) if (f.endsWith(".enc") && !keep.has(f)) await unlink(new URL(f, IMG_DIR));
@@ -157,7 +162,7 @@ const txns = recent.map(({ id, ...t }) => t);
 const data = {
   updatedAt: new Date().toISOString(), fundName: "❤️❤️基金",
   cash, month, stocks, stockValue, total: cash.balance + stockValue, txns,
-  stats: { byMonth }, imageIndex,
+  stats: { byMonth }, imageIndex, photos,
 };
 
 const { iv, ct } = await encrypt(new TextEncoder().encode(JSON.stringify(data)));

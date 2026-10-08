@@ -180,6 +180,14 @@ input { width: 100%; background: var(--ink); border: 1px solid var(--line); bord
 @keyframes deal { from { transform: translateY(60px) rotateX(50deg); opacity: 0; } }
 .intro h2 { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 28px; }
 .intro p { margin: 0; color: var(--muted); max-width: 30ch; }
+.intro-stage { position: relative; width: min(320px, 100%); padding-bottom: 104px; }
+.intro-stage .card { width: 100%; }
+.polaroid { position: absolute; right: -6px; bottom: 0; width: 42%; margin: 0; padding: 7px 7px 22px; background: #f4f1ea;
+  border-radius: 3px; box-shadow: 0 14px 30px -8px rgba(0,0,0,.85); transform: rotate(6deg); animation: drop .9s .5s cubic-bezier(.2,.8,.2,1) both;
+  min-height: 90px; display: grid; place-items: center; }
+.polaroid img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
+.polaroid .fresh { color: #8d8b85; }
+@keyframes drop { from { transform: translateY(-40px) rotate(-8deg); opacity: 0; } }
 .house-logo { width: 210px; max-width: 75%; height: auto; overflow: visible; }
 .toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 40; background: var(--text); color: var(--ink); padding: 10px 16px; border-radius: 99px; font-size: 14px; }
 .empty { color: var(--muted); font-size: 13px; padding-block: 12px; }
@@ -663,10 +671,15 @@ function admin() {
 /* 開卡儀式 */
 function intro() {
   const el = document.createElement("div"); el.className = "intro";
-  el.innerHTML = `${cardHTML()}<h2>生日快樂，${esc(CONFIG.customer)}</h2>
-    <p>${esc(CONFIG.bankName)} 今天正式開業，全行只服務一位客戶。開戶禮 ${fmt(CONFIG.openingBonus)} 點已入帳。</p>
+  const photo = FUND?.photos?.[0];
+  el.innerHTML = `<div class="intro-stage">${cardHTML()}${photo ? `<figure class="polaroid"><span class="fresh">…</span></figure>` : ""}</div>
+    <h2>歡迎${esc(CONFIG.customer)}</h2>
+    <p>${esc(CONFIG.bankName)} 今天正式開業。開戶禮 ${fmt(CONFIG.openingBonus)} 點已入帳。</p>
     <button class="btn pri" id="activate" style="min-width:200px">啟用我的卡片</button>`;
   document.body.appendChild(el);
+  // 合照放在卡片右下角，像拍立得夾在卡片上；圖片跟交易圖片一樣是加密的
+  if (photo) loadImage(photo).then(u => { $(".polaroid", el).innerHTML = `<img src="${u}" alt="我們的合照">`; })
+    .catch(() => $(".polaroid", el)?.remove());
   $("#activate", el).onclick = () => { state.opened = true; save(); el.remove(); toast("卡片已啟用"); };
 }
 
