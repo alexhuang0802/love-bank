@@ -203,7 +203,7 @@ const CONFIG = {
   holderEn: "MY ONLY CUSTOMER",     // 卡面持卡人
   cardNo: "5208 •••• •••• 1314",
   since: "2026/10/05",              // 開戶日
-  openingBonus: 13140,              // 開戶禮點數
+  openingBonus: 5201314,            // 開戶禮點數（改這裡，已開戶的手機也會自動補差額）
   limitText: "無上限",
   pin: "0802",                      // 行員後台密碼（連點左上 logo 5 下）
   perks: [
@@ -235,6 +235,15 @@ function load() {
 }
 function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
 let state = load();
+// 開戶禮改過金額：已開戶的手機補上差額，兌換紀錄不受影響
+{
+  const t0 = state.txns.find(t => t.id === "t0");
+  if (t0 && t0.amount !== CONFIG.openingBonus) {
+    state.balance += CONFIG.openingBonus - t0.amount;
+    t0.amount = CONFIG.openingBonus;
+    save();
+  }
+}
 let tab = "home";
 
 const $ = (s, el = document) => el.querySelector(s);
