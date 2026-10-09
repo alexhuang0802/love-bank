@@ -246,8 +246,17 @@ input { width: 100%; background: var(--ink); border: 1px solid var(--line); bord
   min-height: 90px; display: grid; place-items: center; }
 .polaroid img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
 .polaroid .fresh { color: #8d8b85; }
-.polaroid.big { position: static; width: min(260px, 72vw); padding: 10px 10px 34px; transform: rotate(-3deg); }
-.welcome { cursor: pointer; }
+.welcome { gap: 18px; padding-inline: 0; }
+.pola-strip { display: flex; gap: 22px; width: 100%; max-width: 520px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  padding: 16px calc((100% - min(84vw, 380px)) / 2); }
+.pola-strip::-webkit-scrollbar { display: none; }
+.polaroid.big { position: static; flex: 0 0 min(84vw, 380px); width: auto; padding: 10px 10px 34px; scroll-snap-align: center;
+  transform: rotate(-2deg); min-height: 200px; }
+.polaroid.big:nth-child(even) { transform: rotate(2deg); }
+.polaroid.big img { aspect-ratio: auto; width: 100%; height: auto; max-height: 62vh; object-fit: contain; }
+.dots { display: flex; gap: 7px; }
+.dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+.dots i.on { background: var(--gold); }
 @keyframes drop { from { transform: translateY(-40px) rotate(-8deg); opacity: 0; } }
 .house-logo { width: 210px; max-width: 75%; height: auto; overflow: visible; }
 .toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 40; background: var(--text); color: var(--ink); padding: 10px 16px; border-radius: 99px; font-size: 14px; }
@@ -924,14 +933,24 @@ function admin() {
 /* 開卡儀式 */
 /* 每次打開網銀（開過卡之後）：先跳出合照拍立得，點一下進入 */
 function welcomeBack() {
+  const photos = FUND.photos;
   const el = document.createElement("div"); el.className = "intro welcome";
-  el.innerHTML = `<figure class="polaroid big"><span class="fresh">…</span></figure>
+  el.innerHTML = `<div class="pola-strip">${photos.map((_, i) =>
+      `<figure class="polaroid big" data-i="${i}"><span class="fresh">…</span></figure>`).join("")}</div>
+    ${photos.length > 1 ? `<div class="dots">${photos.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div>` : ""}
     <h2>HI ${esc(CONFIG.customer)}~</h2>
-    <button class="btn pri" style="min-width:200px">進入網銀</button>`;
+    <button class="btn pri" id="enter-bank" style="min-width:200px">進入網銀</button>`;
   document.body.appendChild(el);
-  el.addEventListener("click", () => el.remove());
-  loadImage(FUND.photos[0]).then(u => { $(".polaroid", el).innerHTML = `<img src="${u}" alt="我們的合照">`; })
-    .catch(() => el.remove());
+  // 只有按鈕或點照片外的空白處才進入，避免左右滑照片時誤觸
+  el.addEventListener("click", e => { if (e.target === el || e.target.closest("#enter-bank")) el.remove(); });
+  const strip = $(".pola-strip", el), dots = el.querySelectorAll(".dots i");
+  strip.addEventListener("scroll", () => {
+    const i = Math.round(strip.scrollLeft / strip.firstElementChild.offsetWidth);
+    dots.forEach((d, j) => d.classList.toggle("on", j === i));
+  }, { passive: true });
+  photos.forEach((p, i) => loadImage(p)
+    .then(u => { el.querySelector(`.polaroid[data-i="${i}"]`).innerHTML = `<img src="${u}" alt="我們的合照 ${i + 1}">`; })
+    .catch(() => el.querySelector(`.polaroid[data-i="${i}"]`)?.remove()));
 }
 function intro() {
   const el = document.createElement("div"); el.className = "intro";
