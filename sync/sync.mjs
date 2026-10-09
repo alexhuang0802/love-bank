@@ -84,6 +84,17 @@ const ym = `${prev.getUTCFullYear()}-${String(prev.getUTCMonth() + 1).padStart(2
 const inMonth = a => a.filter(t => t.date?.startsWith(ym));
 const month = { label: ym.replace("-", "/"), income: sum(inMonth(income)), expense: -sum(inMonth(expense)) };
 
+// 愛情小屋：支出裡「房貸」分類的累計與本月（台灣時間）
+const thisYm = `${tw.getUTCFullYear()}-${String(tw.getUTCMonth() + 1).padStart(2, "0")}`;
+const mortgageRows = expense.filter(t => t.tag === "房貸");
+const mortgage = {
+  paid: -sum(mortgageRows),
+  thisMonth: -sum(mortgageRows.filter(t => t.date?.startsWith(thisYm))),
+  monthLabel: thisYm.replace("-", "/"),
+  count: mortgageRows.length,
+  last: mortgageRows.map(t => t.date).filter(Boolean).sort().at(-1) ?? null,
+};
+
 const recent = [...income, ...expense].filter(t => t.date)
   .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
 
@@ -174,7 +185,7 @@ const txns = recent.map(({ id, ...t }) => t);
 const data = {
   updatedAt: new Date().toISOString(), fundName: "❤️❤️基金",
   cash, month, stocks, stockValue, total: cash.balance + stockValue, txns,
-  stats: { byMonth }, imageIndex, photos, perks,
+  stats: { byMonth }, imageIndex, photos, perks, mortgage,
 };
 
 const { iv, ct } = await encrypt(new TextEncoder().encode(JSON.stringify(data)));
