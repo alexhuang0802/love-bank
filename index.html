@@ -194,7 +194,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .bar-top small { color: var(--muted); margin-left: 6px; }
 .bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
 .bar i { display: block; height: 100%; border-radius: 3px; }
-.bar.out i { background: var(--minus); } .bar.in i { background: var(--plus); }
+.bar.out i { background: var(--minus); } .bar.in i { background: var(--plus); } .bar.gold i { background: var(--gold); }
 .trend { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; align-items: end; height: 120px; padding-top: 8px; }
 .trend .col { display: flex; flex-direction: column; align-items: center; gap: 4px; height: 100%; justify-content: flex-end; }
 .trend .pair { display: flex; gap: 3px; align-items: flex-end; height: 100%; }
@@ -676,6 +676,68 @@ function barList(rows, cls) {
     <div class="bar-row"><div class="bar-top"><span>${esc(tag)}<small>${Math.round(v / total * 100)}%</small></span><span>${fmt(Math.round(v))}</span></div>
     <div class="bar ${cls}"><i style="width:${v / max * 100}%"></i></div></div>`).join("")}</div>`;
 }
+/* ===== 本月 vs 過去平均（規則同記帳網站 money_tracker）=====
+   月平均收入：扣「開帳」；月平均支出：不含「投資」；兩者都排除最高 2 個月與 0 元月份。
+   分類平均：排除本月與最高 2 個月後，分類總額 ÷ 月份數。 */
+const SKIP_EXPENSE_TAG = "投資";
+const sumObj = o => Object.values(o ?? {}).reduce((a, b) => a + b, 0);
+function trimmedAvg(arr) {
+  const s = arr.filter(v => v > 0).sort((a, b) => a - b);
+  if (s.length <= 2) return s[0] || 0;
+  const t = s.slice(0, -2);
+  return t.reduce((a, b) => a + b, 0) / t.length;
+}
+function tagAverages(bm, past, kind, monthTotal) {
+  const top2 = new Set([...past].sort((a, b) => monthTotal(b) - monthTotal(a)).slice(0, 2));
+  const use = past.length > 2 ? past.filter(k => !top2.has(k)) : past;
+  const tot = {};
+  for (const k of use) for (const [tag, v] of Object.entries(bm[k]?.[kind] ?? {})) {
+    if (kind === "expense" && tag === SKIP_EXPENSE_TAG) continue;
+    const net = kind === "income" ? v - (bm[k].openingByTag?.[tag] ?? 0) : v;
+    if (net > 0) tot[tag] = (tot[tag] ?? 0) + net;
+  }
+  return Object.fromEntries(Object.entries(tot).map(([t, v]) => [t, v / Math.max(1, use.length)]));
+}
+function vsRows(cur, avg, isExpense) {
+  const tags = [...new Set([...Object.keys(cur), ...Object.keys(avg)])]
+    .filter(t => !(isExpense && t === SKIP_EXPENSE_TAG) && (cur[t] || avg[t] >= 1))
+    .sort((a, b) => (cur[b] ?? 0) - (cur[a] ?? 0) || (avg[b] ?? 0) - (avg[a] ?? 0));
+  if (!tags.length) return `<div class="empty">本月還沒有紀錄。</div>`;
+  return `<div class="bars">${tags.map(t => {
+    const c = cur[t] ?? 0, a = avg[t] ?? 0, pct = a > 0 ? Math.round(c / a * 100) : (c > 0 ? 999 : 0);
+    const cls = isExpense ? (pct >= 100 ? "out" : "in") : (pct >= 100 ? "in" : "gold");
+    return `<div class="bar-row"><div class="bar-top"><span>${esc(t)}${isExpense && pct >= 100 ? " ⚠️" : ""}</span>
+      <span>${fmt(Math.round(c))} / ${fmt(Math.round(a))}<small>${pct > 998 ? "新" : pct + "%"}</small></span></div>
+      <div class="bar ${cls}"><i style="width:${Math.min(100, pct)}%"></i></div></div>`;
+  }).join("")}</div>`;
+}
+function vsAverage(bm) {
+  const tw = new Date(Date.now() + 8 * 3600e3);
+  const curKey = `${tw.getUTCFullYear()}-${String(tw.getUTCMonth() + 1).padStart(2, "0")}`;
+  const past = Object.keys(bm).filter(k => k < curKey).sort();
+  if (!past.length) return "";
+  const incOf = k => sumObj(bm[k]?.income) - (bm[k]?.opening ?? 0);
+  const expOf = k => sumObj(bm[k]?.expense) - (bm[k]?.expense?.[SKIP_EXPENSE_TAG] ?? 0);
+  const avgInc = trimmedAvg(past.map(incOf)), avgExp = trimmedAvg(past.map(expOf));
+  const curInc = bm[curKey] ? incOf(curKey) : 0, curExp = bm[curKey] ? expOf(curKey) : 0;
+  const rates = past.filter(k => incOf(k) > 0).map(k => (incOf(k) - expOf(k)) / incOf(k));
+  const saveRate = rates.length ? Math.round(rates.reduce((a, b) => a + b, 0) / rates.length * 100) : 0;
+  const ip = avgInc ? Math.round(curInc / avgInc * 100) : 0, ep = avgExp ? Math.round(curExp / avgExp * 100) : 0;
+  const curTags = kind => ({ ...(bm[curKey]?.[kind] ?? {}) });
+
+  return `<section class="sec"><div class="sec-head"><h2>本月 vs 過去平均</h2><span class="label">${day(curKey)}</span></div>
+    <div class="sum3">
+      <div><span class="label">本月收入</span><span class="amt plus">+${fmt(Math.round(curInc))}</span><span class="fresh">平均 ${fmt(Math.round(avgInc))}・${ip}%</span></div>
+      <div><span class="label">本月支出</span><span class="amt minus">−${fmt(Math.round(curExp))}</span><span class="fresh">平均 ${fmt(Math.round(avgExp))}・${ep}%</span></div>
+      <div><span class="label">平均存錢率</span><span class="amt ${saveRate >= 0 ? "plus" : "minus"}">${saveRate}%</span><span class="fresh">${rates.length} 個月</span></div>
+    </div>
+  </section>
+  <section class="sec"><div class="sec-head"><h2>支出分類 vs 平均</h2><span class="label">不含投資</span></div>
+    ${vsRows(curTags("expense"), tagAverages(bm, past, "expense", expOf), true)}</section>
+  <section class="sec"><div class="sec-head"><h2>收入分類 vs 平均</h2></div>
+    ${vsRows(curTags("income"), tagAverages(bm, past, "income", incOf), false)}</section>`;
+}
+
 function renderStats() {
   const seg = `<div class="seg seg3" role="group" aria-label="期間">${Object.entries(RANGES).map(([k, l]) =>
     `<button data-range="${k}" aria-pressed="${statRange === k}">${l}</button>`).join("")}</div>`;
@@ -693,7 +755,8 @@ function renderStats() {
   const tv = tk.map(k => ({ k, i: Object.values(bm[k]?.income ?? {}).reduce((a, b) => a + b, 0), o: Object.values(bm[k]?.expense ?? {}).reduce((a, b) => a + b, 0) }));
   const tmax = Math.max(1, ...tv.flatMap(x => [x.i, x.o]));
 
-  return `${head}${seg}
+  return `${head}${vsAverage(bm)}
+  <section class="sec"><div class="sec-head"><h2>期間統計</h2></div>${seg}</section>
   <span class="fresh">${esc(label)}</span>
   <div class="sum3">
     <div><span class="label">收入</span><span class="amt plus">+${fmt(Math.round(ti))}</span></div>

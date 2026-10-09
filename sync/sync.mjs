@@ -108,6 +108,13 @@ for (const [kind, rows] of [["income", income], ["expense", expense]]) {
     m[k] = (m[k] ?? 0) + Math.abs(t.amount);
   }
 }
+// 「開帳」是一次性的期初資金，算月平均收入時要扣掉（跟記帳網站同一套規則）
+for (const t of income) {
+  if (!t.date || t.title !== "開帳") continue;
+  const m = byMonth[t.date.slice(0, 7)], k = t.tag || "未分類";
+  m.opening = (m.opening ?? 0) + t.amount;
+  (m.openingByTag ??= {})[k] = (m.openingByTag[k] ?? 0) + t.amount;
+}
 
 // ===== 加密金鑰：PBKDF2(SHA-256, 250k) → AES-GCM。salt 沿用舊檔，讓手機記住的金鑰持續有效 =====
 const { subtle } = globalThis.crypto;
