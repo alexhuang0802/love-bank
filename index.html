@@ -831,7 +831,7 @@ function redeem(p) {
   sheet(`<h3>${p.em} ${esc(p.title)}</h3>
     <div><div class="kv"><span>扣除點數</span><span class="amt minus">−${fmt(p.cost)}</span></div>
     <div class="kv"><span>兌換後餘額</span><span class="amt">${fmt(state.balance - p.cost)}</span></div></div>
-    <p>兌換後會產生一張憑證，出示給本行行員即可使用。</p>
+    <p>確定要發動嗎？卡牌一旦打出，就沒有反悔這回事。</p>
     <div class="btns"><button class="btn ghost" data-close>再想想</button><button class="btn pri" id="ok">確認兌換</button></div>`, s => {
     $("#ok", s).onclick = async () => {
       if (cloud()) {
@@ -865,7 +865,7 @@ async function playCard(p, v) {
         <div class="duel-title"><b>${esc(p.title)}</b><span>✦</span></div>
         <div class="duel-art">${art}</div>
         <div class="duel-type">【權益卡／發動】</div>
-        <div class="duel-desc">${esc(p.desc || "出示這張卡，行員就必須照辦。")}</div>
+        <div class="duel-desc">${esc(p.desc || "效果：持卡人想怎樣就怎樣。")}</div>
         <div class="duel-foot"><span>${esc(CONFIG.bankName)}</span><span>COST ${fmt(p.cost)}</span></div>
       </div>
     </div></div>
