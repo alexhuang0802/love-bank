@@ -246,6 +246,8 @@ input { width: 100%; background: var(--ink); border: 1px solid var(--line); bord
   min-height: 90px; display: grid; place-items: center; }
 .polaroid img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; }
 .polaroid .fresh { color: #8d8b85; }
+.polaroid.big { position: static; width: min(260px, 72vw); padding: 10px 10px 34px; transform: rotate(-3deg); }
+.welcome { cursor: pointer; }
 @keyframes drop { from { transform: translateY(-40px) rotate(-8deg); opacity: 0; } }
 .house-logo { width: 210px; max-width: 75%; height: auto; overflow: visible; }
 .toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 40; background: var(--text); color: var(--ink); padding: 10px 16px; border-radius: 99px; font-size: 14px; }
@@ -458,6 +460,7 @@ async function remember(key) {
 function unlocked(data) {
   FUND = data; $("#lock")?.remove(); render();
   if (storageOk && !state.opened) intro();
+  else if (FUND?.photos?.[0]) welcomeBack();
   syncPoints();
 }
 
@@ -919,6 +922,17 @@ function admin() {
 }
 
 /* 開卡儀式 */
+/* 每次打開網銀（開過卡之後）：先跳出合照拍立得，點一下進入 */
+function welcomeBack() {
+  const el = document.createElement("div"); el.className = "intro welcome";
+  el.innerHTML = `<figure class="polaroid big"><span class="fresh">…</span></figure>
+    <h2>HI ${esc(CONFIG.customer)}~</h2>
+    <button class="btn pri" style="min-width:200px">進入網銀</button>`;
+  document.body.appendChild(el);
+  el.addEventListener("click", () => el.remove());
+  loadImage(FUND.photos[0]).then(u => { $(".polaroid", el).innerHTML = `<img src="${u}" alt="我們的合照">`; })
+    .catch(() => el.remove());
+}
 function intro() {
   const el = document.createElement("div"); el.className = "intro";
   const photo = FUND?.photos?.[0];
