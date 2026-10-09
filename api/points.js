@@ -7,7 +7,7 @@ import { pbkdf2Sync, createHash, timingSafeEqual, randomInt } from 'node:crypto'
 
 const POINTS_DS = 'd7643339-684a-4255-ac0c-7e4a74ac1c95';
 const HOUSE_PAGE = '3f48718e-66c1-81a2-99d9-f5ba73555415'; // Notion「🏠 愛情小屋」的「我們的家」那一列
-const HOUSE_FIELDS = { price: '房子總價', down: '頭期款', years: '貸款年數', monthly: '每月還款' };
+const HOUSE_FIELDS = { price: '房子總價', down: '頭期款', years: '貸款年數', monthly: '每月還款', rate: '房貸利率' };
 const OPENING_BONUS = 5201314;   // 跟 index.html 的 CONFIG.openingBonus 一致
 const SITE = 'https://alexhuang0802.github.io';
 const NOTION = { 'Notion-Version': '2025-09-03', 'Content-Type': 'application/json' };

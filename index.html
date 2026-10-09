@@ -590,7 +590,7 @@ function houseSvg(pct) {
 function renderHouse() {
   const head = `<div class="hello"><small>我們的家</small><h1>愛情小屋</h1></div>`;
   if (HOUSE === undefined) return `${head}<div class="empty">正在讀取房貸設定…</div>`;
-  const { price, down, years, monthly } = HOUSE;
+  const { price, down, years, monthly, rate } = HOUSE;
   const m = FUND?.mortgage ?? { paid: 0, thisMonth: 0, count: 0, monthLabel: "" };
   const loan = has(price) && has(down) ? price - down : has(price) ? price : null;
   const periods = has(years) ? years * 12 : null;
@@ -605,7 +605,7 @@ function renderHouse() {
   <div class="house-hero">${houseSvg(pct)}
     <div class="meta"><span class="label">還款進度</span>
       <span class="pct">${total ? (pct * 100).toFixed(1) : "—"}<small style="font-size:16px">%</small></span>
-      <span class="fresh">${total ? `已還 ${fmt(Math.round(m.paid))} / 總還款 ${fmt(Math.round(total))}` : "填入每月還款和貸款年數後就會計算"}</span></div>
+      ${total ? `<span class="fresh">已還 ${fmt(Math.round(m.paid))} / 總還款 ${fmt(Math.round(total))}</span>` : ""}</div>
   </div>
 
   <section class="sec"><div class="sec-head"><h2>實際還款</h2>${status}</div>
@@ -615,8 +615,6 @@ function renderHouse() {
       <div><span class="label">已繳期數</span><span class="v">${paidPeriods != null && periods ? `${paidPeriods}<small>/ ${periods} 期</small>` : "—"}</span></div>
       <div><span class="label">剩餘期數</span><span class="v">${paidPeriods != null && periods ? `${Math.max(0, periods - paidPeriods)}<small>期</small>` : "—"}</span></div>
     </div>
-    ${m.count ? `<span class="fresh">來自 Notion 支出「房貸」分類，共 ${m.count} 筆，最近一筆 ${day(m.last)}</span>`
-      : `<span class="fresh">Notion 支出還沒有「房貸」分類的紀錄。記第一筆時 Tags 選「房貸」，同步後就會出現在這裡。</span>`}
   </section>
 
   <section class="sec"><div class="sec-head"><h2>房貸資料</h2></div>
@@ -626,23 +624,26 @@ function renderHouse() {
       <div><span class="label">貸款金額</span><span class="v">${money(loan)}</span></div>
       <div><span class="label">貸款年數</span><span class="v">${has(years) ? `${years}<small>年・${periods} 期</small>` : `<span class="fresh">未填</span>`}</span></div>
       <div><span class="label">每月還款</span><span class="v">${money(monthly)}</span></div>
+      <div><span class="label">房貸利率</span><span class="v">${has(rate) ? `${rate}<small>%</small>` : `<span class="fresh">未填</span>`}</span></div>
       <div><span class="label">預計總還款</span><span class="v">${money(total)}</span></div>
+      <div><span class="label">預估利息</span><span class="v">${money(total && loan ? Math.max(0, total - loan) : null)}</span></div>
     </div>
-    ${total && loan ? `<span class="fresh">預估利息約 NT$${fmt(Math.round(Math.max(0, total - loan)))}（總還款 − 貸款金額）</span>` : ""}
     ${editBtn}
   </section>`;
 }
 function editHouse() {
   const h = HOUSE || {};
-  const field = (k, label, ph) => `<label class="field">${label}<input id="h-${k}" type="number" inputmode="numeric" min="0" placeholder="${ph}" value="${has(h[k]) ? h[k] : ""}"></label>`;
+  const field = (k, label, ph) => `<label class="field">${label}<input id="h-${k}" type="number" min="0" placeholder="${ph}" value="${has(h[k]) ? h[k] : ""}"
+    ${k === "rate" ? `inputmode="decimal" step="any"` : `inputmode="numeric"`}></label>`;
   sheet(`<h3>房貸資料</h3>
     ${field("price", "房子總價（元）", "例如 15000000")}
     ${field("down", "頭期款（元）", "例如 3000000")}
     ${field("years", "貸款年數", "例如 30")}
     ${field("monthly", "每月還款（元）", "例如 45000")}
+    ${field("rate", "房貸利率（%）", "例如 2.185")}
     <div class="btns"><button class="btn ghost" data-close>取消</button><button class="btn pri" id="h-save">儲存</button></div>`, s => {
     $("#h-save", s).onclick = async () => {
-      const house = Object.fromEntries(["price", "down", "years", "monthly"].map(k => { const v = $("#h-" + k, s).value.trim(); return [k, v === "" ? null : Number(v)]; }));
+      const house = Object.fromEntries(["price", "down", "years", "monthly", "rate"].map(k => { const v = $("#h-" + k, s).value.trim(); return [k, v === "" ? null : Number(v)]; }));
       const b = $("#h-save", s); b.disabled = true; b.textContent = "儲存中…";
       try {
         if (cloud()) HOUSE = (await pointsCall({ action: "house_set", house })).house;
