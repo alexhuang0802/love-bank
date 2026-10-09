@@ -7,6 +7,7 @@ const DS = {
   income:  "1e68718e-66c1-817e-bf85-000b90872144",
   expense: "1e68718e-66c1-81b7-81d0-000b62860e67",
   stocks:  "32b8718e-66c1-8038-8ebb-000beee610f8",
+  perks:   "64325c42-b28e-4247-89c9-542c33350347", // 🎁 權益清單
 };
 const TEMPLATE_ROWS = new Set(["Acme Inc. Salary", "Emca Inc. Salary", "Dividents"]);
 const OUT = new URL("../data.enc.json", import.meta.url);
@@ -154,6 +155,17 @@ for (const t of recent) {
   if (files.length) t.imgs = files;
 }
 const photos = await encryptImages(PHOTO_PAGE);
+
+// 權益清單：上架的才放進網銀，每個權益頁面裡的第一張圖是卡牌插圖
+const perks = [];
+for (const { id, properties: p } of (await queryAll(DS.perks))
+  .filter(r => r.properties["上架"]?.checkbox && text(r.properties["名稱"]) && num(r.properties["點數"]) > 0)
+  .sort((a, b) => (num(a.properties["排序"]) ?? 999) - (num(b.properties["排序"]) ?? 999))) {
+  perks.push({
+    id, title: text(p["名稱"]), cost: num(p["點數"]), em: text(p["圖示"]) || "🎁", desc: text(p["說明"]),
+    img: (await encryptImages(id))[0] ?? null,
+  });
+}
 // 不再使用的圖片刪掉
 const keep = new Set(Object.values(imageIndex));
 for (const f of await readdir(IMG_DIR)) if (f.endsWith(".enc") && !keep.has(f)) await unlink(new URL(f, IMG_DIR));
@@ -162,7 +174,7 @@ const txns = recent.map(({ id, ...t }) => t);
 const data = {
   updatedAt: new Date().toISOString(), fundName: "❤️❤️基金",
   cash, month, stocks, stockValue, total: cash.balance + stockValue, txns,
-  stats: { byMonth }, imageIndex, photos,
+  stats: { byMonth }, imageIndex, photos, perks,
 };
 
 const { iv, ct } = await encrypt(new TextEncoder().encode(JSON.stringify(data)));

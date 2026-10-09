@@ -110,6 +110,52 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .perk { text-align: left; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 10px; min-width: 0; transition: border-color .2s; }
 .perk:hover { border-color: var(--gold); }
 .perk .em { font-size: 22px; }
+.perk-art { display: grid; place-items: center; width: 100%; aspect-ratio: 4 / 3; border-radius: 10px; background: var(--ink); overflow: hidden; }
+.perk-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.perk-art .em { font-size: 30px; }
+
+/* 出牌動畫 */
+.summon { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
+  padding: 24px 16px calc(24px + env(safe-area-inset-bottom, 0px)); background: radial-gradient(circle at 50% 42%, #1d1a14 0%, #050506 70%); overflow: hidden; }
+.duel-wrap { perspective: 1100px; }
+.duel-card { position: relative; width: min(240px, 64vw); aspect-ratio: 59 / 86; transform-style: preserve-3d; transform: rotateY(180deg);
+  animation: summon 2s cubic-bezier(.2,.75,.25,1) both; }
+@keyframes summon {
+  0%   { transform: translateY(110vh) rotateZ(-28deg) rotateY(0) scale(.55); }
+  42%  { transform: translateY(0) rotateZ(0) rotateY(0) scale(1); }
+  55%  { transform: translateY(-6px) rotateY(0) scale(1.06); }
+  62%  { transform: translateY(-6px) rotateY(0) scale(1.06); }
+  100% { transform: translateY(0) rotateY(180deg) scale(1); }
+}
+.face { position: absolute; inset: 0; border-radius: 12px; backface-visibility: hidden; -webkit-backface-visibility: hidden; overflow: hidden; }
+.face.back { display: grid; place-items: center; border: 3px solid var(--gold);
+  background: repeating-conic-gradient(from 0deg, #1a1712 0 10deg, #0e0c09 10deg 20deg), #0e0c09; box-shadow: 0 0 40px rgba(201,177,126,.35); }
+.face.back span { width: 44%; aspect-ratio: 1; border-radius: 50%; border: 2px solid var(--gold); display: grid; place-items: center;
+  font-family: var(--f-display); font-weight: 700; font-size: 44px; color: var(--gold); background: #0b0b0d; }
+.face.front { transform: rotateY(180deg); display: flex; flex-direction: column; gap: 6px; padding: 9px;
+  background: linear-gradient(160deg, #e8d5a6, #b8975a 55%, #8a6c37); color: #1b150b; box-shadow: 0 0 60px rgba(232,213,166,.55); }
+.duel-title { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 4px;
+  background: rgba(255,250,235,.55); border: 1px solid rgba(60,40,10,.35); font-size: 14px; }
+.duel-title b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.duel-art { flex: 1; min-height: 0; display: grid; place-items: center; background: #0b0b0d; border: 3px solid #5a4421; border-radius: 3px; overflow: hidden; }
+.duel-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.duel-em { font-size: 64px; }
+.duel-type { font-size: 11px; font-weight: 700; }
+.duel-desc { font-size: 12px; line-height: 1.45; padding: 6px 8px; min-height: 52px; border-radius: 3px; background: rgba(255,250,235,.6); border: 1px solid rgba(60,40,10,.3); }
+.duel-foot { display: flex; justify-content: space-between; font-size: 10px; letter-spacing: .08em; font-family: var(--f-mono); }
+.rays { position: absolute; left: 50%; top: 42%; width: 160vmax; aspect-ratio: 1; translate: -50% -50%; pointer-events: none;
+  background: repeating-conic-gradient(rgba(232,213,166,.16) 0 6deg, transparent 6deg 18deg); border-radius: 50%;
+  mask: radial-gradient(circle, #000 0 18%, transparent 55%); -webkit-mask: radial-gradient(circle, #000 0 18%, transparent 55%);
+  animation: rays 2.4s 1.05s ease-out both, spin 24s 1.05s linear infinite; }
+@keyframes rays { from { opacity: 0; scale: .3; } to { opacity: 1; scale: 1; } }
+@keyframes spin { to { rotate: 360deg; } }
+.flash { position: absolute; inset: 0; background: #fff8e6; pointer-events: none; opacity: 0; animation: flash .7s 1.2s ease-out; }
+@keyframes flash { 0% { opacity: 0; } 15% { opacity: .85; } 100% { opacity: 0; } }
+.summon-after { position: relative; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; width: min(300px, 100%);
+  animation: rise .5s 2.1s ease-out both; }
+.summon-after .code { font-family: var(--f-mono); font-size: 26px; letter-spacing: .2em; color: var(--gold); }
+.summon-after .btn { width: 100%; margin-top: 8px; }
+@keyframes rise { from { opacity: 0; transform: translateY(16px); } }
 .perk b { font-weight: 500; font-size: 14px; line-height: 1.35; }
 .perk .cost { font-family: var(--f-mono); font-size: 13px; color: var(--gold); margin-top: auto; }
 .perk[disabled] { opacity: .45; cursor: not-allowed; }
@@ -484,12 +530,22 @@ async function boot() {
   showLock();
 }
 
+// 權益清單以 Notion「🎁 權益清單」為準（同步進加密資料），沒有時才用 CONFIG.perks
+const perksList = () => FUND?.perks?.length ? FUND.perks : CONFIG.perks;
 function renderPerks() {
   return `
   <div class="hello"><small>可用點數 ${fmt(state.balance)} pts</small><h1>卡友權益</h1></div>
-  <div class="perks">${CONFIG.perks.map(p => `
+  <div class="perks">${perksList().map(p => `
     <button class="perk" data-perk="${p.id}" ${p.cost > state.balance ? "disabled" : ""}>
-      <span class="em">${p.em}</span><b>${esc(p.title)}</b><span class="cost">${fmt(p.cost)} pts</span></button>`).join("")}</div>`;
+      <span class="perk-art" ${p.img ? `data-img="${p.img}"` : ""}><span class="em">${p.em}</span></span>
+      <b>${esc(p.title)}</b><span class="cost">${fmt(p.cost)} pts</span></button>`).join("")}</div>`;
+}
+// 解密過的圖片留著，切分頁不用重新解密
+const IMG_CACHE = new Map();
+const cachedImage = path => { if (!IMG_CACHE.has(path)) IMG_CACHE.set(path, loadImage(path)); return IMG_CACHE.get(path); };
+function hydrateImages() {
+  document.querySelectorAll("[data-img]").forEach(el => cachedImage(el.dataset.img)
+    .then(u => { el.innerHTML = `<img src="${u}" alt="">`; }).catch(() => {}));
 }
 
 /* ===== 收支分析：依分類統計 ❤️❤️基金的收入與支出 ===== */
@@ -571,6 +627,7 @@ function render() {
   $("#app").innerHTML = tab === "perks" ? renderPerks() : tab === "history" ? renderHistory() : tab === "stats" ? renderStats() : renderHome();
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === tab ? "page" : "false"));
   bindCardTilt();
+  if (CUR_KEY) hydrateImages();
 }
 function go(t) { tab = t; render(); window.scrollTo(0, 0); }
 
@@ -600,7 +657,7 @@ function redeem(p) {
         const b = $("#ok", s); b.disabled = true; b.textContent = "兌換中…";
         try {
           const { voucher } = await pointsCall({ action: "redeem", perkId: p.id, title: p.title, cost: p.cost });
-          await syncPoints(); s.remove(); showVoucher(voucher);
+          await syncPoints(); s.remove(); playCard(p, voucher);
         } catch (e) {
           toast(e.status === 409 ? "點數不夠喔" : "連不上銀行，請稍後再試");
           b.disabled = false; b.textContent = "確認兌換";
@@ -610,9 +667,33 @@ function redeem(p) {
       const v = { id: "v" + Date.now(), perkId: p.id, title: p.title, code: code(), at: now(), used: false };
       state.balance -= p.cost; state.vouchers.unshift(v);
       state.txns.unshift({ id: "t" + Date.now(), at: v.at, title: "兌換・" + p.title, note: "憑證 " + v.code, amount: -p.cost });
-      save(); render(); s.remove(); showVoucher(v);
+      save(); render(); s.remove(); playCard(p, v);
     };
   });
+}
+/* ===== 出牌動畫：卡背從下方飛入 → 停住蓄力 → 翻面爆光 → 權益卡現身 → 跳出憑證 ===== */
+async function playCard(p, v) {
+  let art = `<span class="duel-em">${p.em}</span>`;
+  if (p.img) { try { art = `<img src="${await Promise.race([cachedImage(p.img), new Promise((_, r) => setTimeout(r, 2500))])}" alt="">`; } catch (e) {} }
+  const el = document.createElement("div"); el.className = "summon"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true");
+  el.innerHTML = `
+    <div class="rays" aria-hidden="true"></div><div class="flash" aria-hidden="true"></div>
+    <div class="duel-wrap"><div class="duel-card">
+      <div class="face back" aria-hidden="true"><span>${esc(CONFIG.mono)}</span></div>
+      <div class="face front">
+        <div class="duel-title"><b>${esc(p.title)}</b><span>✦</span></div>
+        <div class="duel-art">${art}</div>
+        <div class="duel-type">【權益卡／發動】</div>
+        <div class="duel-desc">${esc(p.desc || "出示這張卡，行員就必須照辦。")}</div>
+        <div class="duel-foot"><span>${esc(CONFIG.bankName)}</span><span>COST ${fmt(p.cost)}</span></div>
+      </div>
+    </div></div>
+    <div class="summon-after">
+      <span class="label">權益憑證</span><span class="code">${v.code}</span><span class="fresh">${dt(v.at)}・截圖給他看，他就必須照辦</span>
+      <button class="btn pri" data-close>收下</button>
+    </div>`;
+  el.addEventListener("click", e => { if (e.target.closest("[data-close]")) el.remove(); });
+  document.body.appendChild(el);
 }
 function showVoucher(v) {
   sheet(`<h3>兌換成功</h3><div class="ticket"><span class="label">${esc(CONFIG.bankName)} 權益憑證</span><b>${esc(v.title)}</b>
@@ -691,7 +772,7 @@ document.addEventListener("click", e => {
   if (t.dataset.hist) { hist = t.dataset.hist; if (!t.dataset.go) { render(); return; } }
   if (t.dataset.tab) go(t.dataset.tab);
   else if (t.dataset.go) go(t.dataset.go);
-  else if (t.dataset.perk) redeem(CONFIG.perks.find(p => p.id === t.dataset.perk));
+  else if (t.dataset.perk) redeem(perksList().find(p => p.id === t.dataset.perk));
   else if (t.id === "logo") logoTap();
   else if (t.id === "q-vouch") { hist = "points"; go("history"); }
   else if (t.id === "q-cs") sheet(`<h3>專屬理專</h3><p>本行理專 24 小時待命，回覆速度視理專是否在打電動而定。</p>
