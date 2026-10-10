@@ -388,16 +388,15 @@ function loveDays() {
   const today = twToday(), tg = list.find(a => a.together);
   const days = tg ? Math.round((today - ymd(tg.date).t) / DAY) + 1 : null;
   const md = t => { const d = new Date(t); return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`; };
-  // 生日、其他紀念日（含週年、整百天、連假）各只顯示最近兩個
-  const all = upcoming(list, today), isBirthday = u => u.title.includes("生日");
+  // 生日、週年、整百天、連假一起排，只顯示最近兩個
+  const all = upcoming(list, today);
   const group = (name, items) => items.length ? `<div class="love-list"><span class="label">${name}</span>${items.map(u => `
       <div class="row"><div class="meta"><b>${esc(u.em || "📅")} ${esc(u.title)}${u.note ? `<span class="tag">${esc(u.note)}</span>` : ""}</b><span>${md(u.at)}</span></div>
       <span class="pill ${u.left === 0 ? "ok" : ""}">${u.left === 0 ? "就是今天！" : `還有 ${fmt(u.left)} 天`}</span></div>`).join("")}</div>` : "";
   return `<section class="love">
     ${tg ? `<div class="love-days"><span class="label">我們在一起</span>
       <span class="love-n">第 <b>${fmt(days)}</b> 天 💞</span><span class="fresh">since ${day(tg.date)}</span></div>` : ""}
-    ${group("生日", all.filter(isBirthday).slice(0, 2))}
-    ${group("紀念日・連假", all.filter(u => !isBirthday(u)).slice(0, 2))}
+    ${group("紀念日倒數", all.slice(0, 2))}
   </section>`;
 }
 
