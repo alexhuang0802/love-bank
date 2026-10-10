@@ -340,6 +340,13 @@ input, textarea { width: 100%; background: var(--ink); border: 1px solid var(--l
 .dots i.on { background: var(--gold); }
 @keyframes drop { from { transform: translateY(-40px) rotate(-8deg); opacity: 0; } }
 .house-logo { width: 210px; max-width: 75%; height: auto; overflow: visible; }
+.tour { position: fixed; inset: 0; z-index: 45; }
+.tour-hole { position: fixed; border-radius: 16px; border: 1px solid var(--gold); box-shadow: 0 0 0 9999px rgba(0,0,0,.74); transition: all .35s ease; pointer-events: none; }
+.tour-tip { position: fixed; left: 16px; right: 16px; max-width: 420px; margin-inline: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 18px 40px rgba(0,0,0,.6); animation: tip-in .3s ease both; }
+.tour-tip b { font-size: 17px; font-weight: 500; } .tour-tip p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+.tour-tip .btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px; }
+@keyframes tip-in { from { opacity: 0; transform: translateY(8px); } }
 .toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); z-index: 40; background: var(--text); color: var(--ink); padding: 10px 16px; border-radius: 99px; font-size: 14px; }
 .empty { color: var(--muted); font-size: 13px; padding-block: 12px; }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
@@ -719,7 +726,7 @@ function renderGame() {
     <span class="fresh">每 12 小時抽一次</span>
   </section>
 
-  <section class="sec"><div class="sec-head"><h2>我的手牌</h2><span class="label">${groups.reduce((s, g) => s + g.cards.length, 0)} 張</span></div>
+  <section class="sec" id="hand-sec"><div class="sec-head"><h2>我的手牌</h2><span class="label">${groups.reduce((s, g) => s + g.cards.length, 0)} 張</span></div>
     ${groups.length ? `<div class="hand">${groups.map(g => {
       const info = perkInfo(g.perkId), left = daysLeft(g.cards[0].expires);
       return `<button class="hcard ${RCLS[g.rarity]}" data-card="${esc(g.key)}">
@@ -1286,6 +1293,55 @@ function admin() {
   });
 }
 
+/* ===== 新手指引：開卡後依序介紹 紀念日 → 存款 → 抽卡 → 卡片使用 → 收支明細 ===== */
+const TOUR = [
+  { tab: "home", sel: ".love", title: "💞 我們的紀念日", text: "這裡記著我們在一起第幾天，還有最近的紀念日、生日和連假倒數。" },
+  { tab: "home", sel: ".accts .acct", title: "💰 我們的存款", text: "❤️❤️基金的現金和股票都在這，每天自動更新。" },
+  { tab: "perks", sel: ".starter, .draw-box", title: "✦ 抽卡", text: "先開「新手禮包」拿第一批卡片。之後每 12 小時可以抽一次，抽到的卡會收進手牌。" },
+  { tab: "perks", sel: "#hand-sec", title: "🎴 卡片怎麼用", text: "點手牌裡的卡，按「發動」就會拿到一組憑證碼，拿給我看，我就必須照辦。不想要的卡可以分解換點數，點數能在商店買道具。" },
+  { tab: "history", sel: "#app .sec", title: "≡ 收支明細", text: "基金的每一筆收入和支出都在這，有附照片的可以點開看；下面的「收支分析」可以看每個月錢花去哪。" },
+];
+function startTour(i = 0) {
+  document.querySelector(".tour")?.remove();
+  while (i < TOUR.length) {
+    const s = TOUR[i];
+    if (tab !== s.tab) { if (s.tab === "history") hist = "fund"; go(s.tab); }
+    if ($(s.sel)) break;
+    i++;   // 這一步的區塊不存在（例如還沒有紀念日）就跳過
+  }
+  if (i >= TOUR.length) return endTour();
+  const s = TOUR[i], last = i === TOUR.length - 1, target = $(s.sel);
+  const el = document.createElement("div"); el.className = "tour"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true");
+  el.innerHTML = `<div class="tour-hole"></div><div class="tour-tip">
+      <span class="label">${i + 1} / ${TOUR.length}</span><b>${s.title}</b><p>${s.text}</p>
+      <div class="btns">${last ? "" : `<button class="btn ghost" data-skip>略過</button>`}
+        <button class="btn pri" data-next>${last ? (GAME?.starterClaimed === false ? "去開新手禮包 🎁" : "開始使用") : "下一步"}</button></div></div>`;
+  document.body.appendChild(el);
+  const tall = () => target.offsetHeight > innerHeight * 0.5;   // 太高的區塊（例如整串交易）只框上半段
+  if (tall()) { scrollTo(0, target.getBoundingClientRect().top + scrollY - 70); } else target.scrollIntoView({ block: "center" });
+  const place = () => {
+    const b = target.getBoundingClientRect(), r = tall() ? { top: b.top, left: b.left, width: b.width, bottom: Math.min(b.bottom, innerHeight * 0.5) } : b;
+    r.height = r.bottom - r.top;
+    const hole = $(".tour-hole", el), tip = $(".tour-tip", el), pad = 8;
+    Object.assign(hole.style, { top: `${r.top - pad}px`, left: `${r.left - pad}px`, width: `${r.width + pad * 2}px`, height: `${r.height + pad * 2}px` });
+    const below = r.bottom + pad + tip.offsetHeight + 16 < innerHeight;
+    tip.style.top = below ? `${Math.max(16, r.bottom + pad + 12)}px` : "";
+    tip.style.bottom = below ? "" : `${Math.max(16, innerHeight - r.top + pad + 12)}px`;
+  };
+  place(); setTimeout(place, 120); addEventListener("resize", place); addEventListener("scroll", place, { passive: true });
+  const unbind = () => { removeEventListener("resize", place); removeEventListener("scroll", place); };
+  el.addEventListener("click", e => {
+    if (e.target.closest("[data-skip]")) { unbind(); return endTour(); }
+    if (!e.target.closest("[data-next]")) return;
+    unbind();
+    last ? endTour(true) : startTour(i + 1);
+  });
+}
+function endTour(toDraw) {
+  document.querySelector(".tour")?.remove();
+  go(toDraw || GAME?.starterClaimed === false ? "perks" : "home");
+}
+
 /* 開卡儀式 */
 /* 每次打開網銀（開過卡之後）：先跳出合照拍立得，點一下進入 */
 function welcomeBack() {
@@ -1339,7 +1395,7 @@ function intro() {
   // 合照放在卡片右下角，像拍立得夾在卡片上；圖片跟交易圖片一樣是加密的
   if (photo) loadImage(photo).then(u => { $(".polaroid", el).innerHTML = `<img src="${u}" alt="我們的合照">`; })
     .catch(() => $(".polaroid", el)?.remove());
-  $("#activate", el).onclick = () => { state.opened = true; save(); el.remove(); toast("卡片已啟用"); };
+  $("#activate", el).onclick = () => { state.opened = true; save(); el.remove(); startTour(); };
 }
 
 document.addEventListener("click", e => {
