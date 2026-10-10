@@ -693,7 +693,6 @@ function renderGame() {
   if (!GAME?.draw) return `${head}<div class="empty">正在洗牌…</div>`;
   const d = GAME.draw, wait = d.nextAt ? Date.parse(d.nextAt) - Date.now() : 0;
   const boosts = inHand().filter(c => c.perkId === "boost").length, groups = handGroups();
-  const odds = d.odds, pct = v => (Math.round(v * 10) / 10) + "%";
 
   return `${head}
   ${GAME.starterClaimed === false ? `<button class="starter" data-starter>
@@ -704,7 +703,7 @@ function renderGame() {
     ${wait > 0 ? `<button class="btn ghost" disabled>下次抽卡 <span id="draw-timer">${clock(wait)}</span></button>`
       : `<button class="btn pri draw-btn" data-draw>抽一張 ✦</button>`}
     ${boosts ? `<label class="boost-opt"><input type="checkbox" id="use-boost"> 使用傳說機率提升券（持有 ${boosts}）</label>` : ""}
-    <span class="fresh">每 12 小時抽一次・每抽 +10 點・${d.pity >= d.pityAt ? "下一抽必中傳說 ✨" : `再 ${d.pityAt - d.pity} 抽內必中傳說`}</span>
+    <span class="fresh">每 12 小時抽一次・每抽 +10 點・${d.forced ? `下一抽必中${d.forced} ✨` : d.pityLabel ? `再 ${d.pityLeft} 抽內必中${d.pityLabel}` : ""}</span>
   </section>
 
   <section class="sec"><div class="sec-head"><h2>我的手牌</h2><span class="label">${groups.reduce((s, g) => s + g.cards.length, 0)} 張</span></div>
@@ -725,15 +724,7 @@ function renderGame() {
         <span>${k === "boost" ? "下一次抽卡，傳說機率 ×3" : "抽卡以外的保證：任選一張權益卡"}</span></div>
         <button class="pill" data-buy="${k}" ${state.balance < it.price ? "disabled" : ""}>${fmt(it.price)} pts</button></div>`).join("")}</div>
   </section>
-
-  <details class="odds"><summary>機率與規則</summary>
-    <div class="kv"><span>💌 沒中（送一句情話）</span><span>${pct(odds.miss)}</span></div>
-    <div class="kv"><span>🟫 普通卡</span><span>${pct(odds["普通"])}</span></div>
-    <div class="kv"><span>🟪 稀有卡</span><span>${pct(odds["稀有"])}</span></div>
-    <div class="kv"><span>🟨 傳說卡</span><span>${pct(odds["傳說"])}</span></div>
-    <div class="kv"><span>🌟 指定卡</span><span>${pct(odds["指定"])}</span></div>
-    <p class="fresh">指定卡機率：每月 14 號、聖誕節 ×2，生日當天 ×10，生日月 ×1.5（取最高）。同一張卡最多 3 張，滿了會自動分解成點數。普通、稀有 90 天、傳說與指定 180 天未使用會自動分解。</p>
-  </details>`;
+`;
 }
 function startDrawTimer() {
   clearInterval(drawTimer);

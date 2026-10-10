@@ -10,6 +10,7 @@ import { pbkdf2Sync, createHash, timingSafeEqual, randomInt } from 'node:crypto'
 const POINTS_DS = 'd7643339-684a-4255-ac0c-7e4a74ac1c95'; // 💝 寵愛點數
 const HAND_DS = '33cf3ef4-6c02-4a23-aead-e5dbbef56939';   // 🃏 手牌
 const PERKS_DS = '64325c42-b28e-4247-89c9-542c33350347';  // 🎁 權益清單
+const CONFIG_DS = '1feb12cc-2ff5-4581-b607-0787c03c530c'; // ⚙️ 抽卡設定（機率、保底）
 const HOUSE_PAGE = '3f48718e-66c1-81a2-99d9-f5ba73555415'; // Notion「🏠 愛情小屋」的「我們的家」那一列
 const HOUSE_FIELDS = { price: '房子總價', down: '頭期款', years: '貸款年數', monthly: '每月還款', rate: '房貸利率' };
 const OPENING_BONUS = 0;      // 開戶時沒有點數，開新手禮包才送 STARTER_POINTS
@@ -17,9 +18,13 @@ const SITE = 'https://alexhuang0802.github.io';
 const NOTION = { 'Notion-Version': '2025-09-03', 'Content-Type': 'application/json' };
 
 // ===== 遊戲規則 =====
-const DRAW_COOLDOWN = 12 * 3600e3, DRAW_REWARD = 10, PITY = 10, MAX_COPIES = 3;
+const DRAW_COOLDOWN = 12 * 3600e3, DRAW_REWARD = 10, MAX_COPIES = 3;
 const STARTER_DRAWS = 6, STARTER_MIN_CARDS = 2, STARTER_POINTS = 1314;   // 開戶新手禮包：免費 6 抽，至少 2 張權益卡，送 1,314 點
-const BASE_ODDS = { miss: 40, 普通: 35, 稀有: 17, 傳說: 5, 指定: 3 };          // %
+// 機率與保底以 Notion「⚙️ 抽卡設定」為準；讀不到時用這組預設
+const DEFAULT_ODDS = { miss: 50, 普通: 28, 稀有: 14, 傳說: 5, 指定: 3 };       // %
+const DEFAULT_PITY = [{ rarity: '傳說', every: 10 }];                         // 每 N 抽至少一張這個稀有度（或更好）
+const RANK = { miss: 0, 普通: 1, 稀有: 2, 傳說: 3, 指定: 4 };
+let CFG = { odds: DEFAULT_ODDS, pity: DEFAULT_PITY };
 const RARITY = { 普通: { pts: 20, days: 90 }, 稀有: { pts: 60, days: 90 }, 傳說: { pts: 200, days: 180 }, 指定: { pts: 300, days: 180 } };
 const SHOP = { boost: { title: '傳說機率提升券', price: 300, rarity: '道具' }, wild: { title: '指定卡', price: 1000, rarity: '指定' } };
 const BIRTHDAY = '04-08';      // 小嘟嘟生日
@@ -47,13 +52,23 @@ function wildBoost(now = Date.now()) {
   if (md.slice(0, 2) === BIRTHDAY.slice(0, 2)) c.push([1.5, '生日月']);
   return c.sort((a, b) => b[0] - a[0])[0] ?? [1, ''];
 }
-function oddsFor({ boost = false, pity = false } = {}) {
-  if (pity) return { miss: 0, 普通: 0, 稀有: 0, 傳說: 100, 指定: 0 };
-  const [m] = wildBoost();
-  const wild = BASE_ODDS.指定 * m, ssr = BASE_ODDS.傳說 * (boost ? 3 : 1);
-  const rest = 100 - wild - ssr, baseRest = BASE_ODDS.miss + BASE_ODDS.普通 + BASE_ODDS.稀有;
-  const k = rest / baseRest;
-  return { miss: BASE_ODDS.miss * k, 普通: BASE_ODDS.普通 * k, 稀有: BASE_ODDS.稀有 * k, 傳說: ssr, 指定: wild };
+function oddsFor({ boost = false } = {}) {
+  const B = CFG.odds, [m] = wildBoost();
+  const wild = Math.min(B.指定 * m, 90), ssr = Math.min(B.傳說 * (boost ? 3 : 1), 90 - wild);
+  const baseRest = B.miss + B.普通 + B.稀有, rest = Math.max(0, 100 - wild - ssr), k = baseRest ? rest / baseRest : 0;
+  return { miss: B.miss * k, 普通: B.普通 * k, 稀有: B.稀有 * k, 傳說: ssr, 指定: wild };
+}
+async function loadConfig() {
+  try {
+    const rows = (await queryAll(CONFIG_DS)).map(({ properties: p }) => ({
+      type: p['類型']?.select?.name, rarity: p['稀有度']?.select?.name, pct: p['機率']?.number, every: p['每幾抽']?.number,
+    }));
+    const odds = { miss: 0, 普通: 0, 稀有: 0, 傳說: 0, 指定: 0 };
+    for (const r of rows.filter(r => r.type === '機率' && r.pct >= 0)) odds[r.rarity === '沒中' ? 'miss' : r.rarity] = r.pct;
+    const sum = Object.values(odds).reduce((a, b) => a + b, 0);
+    const pity = rows.filter(r => r.type === '保底' && RANK[r.rarity] > 0 && r.every >= 1).map(r => ({ rarity: r.rarity, every: Math.round(r.every) }));
+    CFG = { odds: sum > 0 ? Object.fromEntries(Object.entries(odds).map(([k, v]) => [k, v * 100 / sum])) : DEFAULT_ODDS, pity };
+  } catch { CFG = { odds: DEFAULT_ODDS, pity: DEFAULT_PITY }; }
 }
 function roll(odds) {
   let r = randomInt(0, 1_000_000) / 10_000;
@@ -158,10 +173,18 @@ async function dismantle(card, note) {
 function drawState(rows) {
   const draws = rows.filter(r => r.type === '抽卡');            // 新到舊
   const last = draws[0] ? Date.parse(draws[0].at) : 0;
-  const sinceSSR = draws.findIndex(r => r.note.startsWith('傳說'));
-  const pity = sinceSSR === -1 ? draws.length : sinceSSR;
+  // 每條保底：距離上一次抽到「這個稀有度或更好」已經幾抽
+  const pity = CFG.pity.map(p => {
+    const i = draws.findIndex(r => (RANK[r.note] ?? 0) >= RANK[p.rarity]);
+    const since = i === -1 ? draws.length : i;
+    return { ...p, since, left: Math.max(1, p.every - since) };
+  });
+  // 這一抽必須給的稀有度（多條同時觸發時取最高）
+  const forced = pity.filter(p => p.since >= p.every - 1).sort((a, b) => RANK[b.rarity] - RANK[a.rarity])[0]?.rarity ?? null;
+  const show = [...pity].sort((a, b) => RANK[b.rarity] - RANK[a.rarity])[0];
   const [mult, reason] = wildBoost();
-  return { nextAt: last ? new Date(last + DRAW_COOLDOWN).toISOString() : null, pity, pityAt: PITY, wildMult: mult, wildReason: reason };
+  return { nextAt: last ? new Date(last + DRAW_COOLDOWN).toISOString() : null, forced,
+    pityLabel: show?.rarity ?? null, pityLeft: show?.left ?? null, wildMult: mult, wildReason: reason };
 }
 
 export default async function handler(req, res) {
@@ -196,7 +219,7 @@ export default async function handler(req, res) {
       return res.status(200).json({ house });
     }
 
-    const [rows, hand, perks] = await Promise.all([listRows(), listHand(), listPerks()]);
+    const [rows, hand, perks] = await Promise.all([listRows(), listHand(), listPerks(), loadConfig()]);
     const card = id => hand.find(c => c.id === id);
 
     // ===== 抽卡 =====
@@ -206,7 +229,8 @@ export default async function handler(req, res) {
       const boostCard = body.useBoost ? hand.find(c => c.perkId === 'boost' && c.status === '手牌') : null;
       if (body.useBoost && !boostCard) return fail(409, 'no_boost');
 
-      let kind = roll(oddsFor({ boost: !!boostCard, pity: st.pity >= PITY }));
+      let kind = roll(oddsFor({ boost: !!boostCard }));
+      if (st.forced && RANK[kind] < RANK[st.forced]) kind = st.forced;   // 保底觸發
       let perk = null, overflow = 0;
       if (kind in RARITY && kind !== '指定') {
         const all = perks.filter(p => p.rarity === kind);
@@ -226,7 +250,7 @@ export default async function handler(req, res) {
       else if (perk && !overflow) newCard = await addCard({ title: perk.title, perkId: perk.id, rarity: kind });
       if (boostCard) await setCard(boostCard.id, { '狀態': sel('已使用') });
       return res.status(200).json({
-        result: { kind, rarity: kind === 'miss' ? null : kind, perkId: perk?.id ?? null, title: perk?.title ?? (kind === '指定' ? '指定卡' : ''), line, cardId: newCard?.id ?? null, boosted: !!boostCard, pity: st.pity >= PITY, overflow },
+        result: { kind, rarity: kind === 'miss' ? null : kind, perkId: perk?.id ?? null, title: perk?.title ?? (kind === '指定' ? '指定卡' : ''), line, cardId: newCard?.id ?? null, boosted: !!boostCard, pity: !!st.forced, overflow },
         reward: DRAW_REWARD, nextAt: new Date(Date.now() + DRAW_COOLDOWN).toISOString(),
       });
     }
