@@ -121,8 +121,13 @@ async function listHand() {
 }
 async function listPerks() {
   return (await queryAll(PERKS_DS))
-    .filter(r => r.properties['上架']?.checkbox && txt(r.properties['名稱']) && r.properties['點數']?.number > 0)
-    .map(({ id, properties: p }) => ({ id, title: txt(p['名稱']), cost: p['點數'].number, rarity: rarityOf(p['點數'].number) }));
+    .filter(r => r.properties['上架']?.checkbox && txt(r.properties['名稱']) && (r.properties['稀有度']?.select || r.properties['點數']?.number > 0))
+    .map(({ id, properties: p }) => ({
+      id, title: txt(p['名稱']), cost: p['點數']?.number ?? 0,
+      // Notion「稀有度」欄位優先；空白才用點數判斷
+      rarity: ['普通', '稀有', '傳說'].includes(p['稀有度']?.select?.name) ? p['稀有度'].select.name : rarityOf(p['點數']?.number ?? 0),
+      guaranteed: !!p['新手必中']?.checkbox,
+    }));
 }
 // 舊版「兌換」扣點的紀錄不再算進餘額（改成抽卡制之前的資料）
 const balanceOf = rows => OPENING_BONUS + rows.filter(r => r.type !== '兌換').reduce((s, r) => s + r.amount, 0);
@@ -231,7 +236,13 @@ export default async function handler(req, res) {
       const held = id => hand.filter(c => c.perkId === id && c.status === '手牌').length;
       const results = [];
       let cards = 0;
-      for (let i = 0; i < STARTER_DRAWS; i++) {
+      // 先發「新手必中」的卡（Notion 權益清單勾選的），剩下的抽數再隨機
+      for (const p of perks.filter(x => x.guaranteed).slice(0, STARTER_DRAWS)) {
+        const cardId = (await addCard({ title: p.title, perkId: p.id, rarity: p.rarity })).id;
+        hand.push({ perkId: p.id, status: '手牌' }); cards++;
+        results.push({ kind: p.rarity, rarity: p.rarity, perkId: p.id, title: p.title, line: '', cardId, guaranteed: true });
+      }
+      for (let i = results.length; i < STARTER_DRAWS; i++) {
         const left = STARTER_DRAWS - i, need = STARTER_MIN_CARDS - cards;
         let kind = roll(oddsFor());
         if (kind === 'miss' && need >= left) {   // 剩下的抽數剛好等於還差的卡數：這抽一定要是卡
@@ -252,6 +263,7 @@ export default async function handler(req, res) {
           line: kind === 'miss' ? LOVE_LINES[randomInt(LOVE_LINES.length)] : '', cardId });
       }
       await addRow({ type: '新手禮包', title: `開戶新手禮包・${STARTER_DRAWS} 抽＋開戶禮`, amount: STARTER_POINTS, note: `${cards} 張卡` });
+      for (let i = results.length - 1; i > 0; i--) { const j = randomInt(i + 1); [results[i], results[j]] = [results[j], results[i]]; }   // 打亂順序，必中的卡不會固定在前面
       return res.status(200).json({ results, points: STARTER_POINTS });
     }
     // ===== 發動手牌 =====
