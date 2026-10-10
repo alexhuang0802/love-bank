@@ -58,8 +58,12 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .card::after { content: ""; position: absolute; inset: -40%; pointer-events: none;
   background: linear-gradient(115deg, transparent 40%, rgba(255,240,210,.13) 50%, transparent 60%);
   transform: translateX(var(--shine, -30%)); transition: transform .25s ease-out; }
-.card-bg { position: absolute; inset: 0; z-index: 0; }
-.card-bg img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card-bg { position: absolute; inset: 0; z-index: 0; overflow: hidden; }
+.card-bg img { position: relative; z-index: 1; width: 100%; height: 100%; object-fit: cover; display: block; }
+/* 直式或方形照片：整張放進卡片，旁邊用同一張照片模糊後填滿 */
+.card-bg.fit img { object-fit: contain; }
+.card-bg.fit::before { content: ""; position: absolute; inset: -24px; background: var(--bg-img) center / cover; filter: blur(20px) brightness(.55); }
+.card-bg::after { z-index: 2; }
 .card-bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.45) 0%, rgba(0,0,0,.05) 40%, rgba(0,0,0,.6) 100%); }
 .card.has-bg .card-tier, .card.has-bg .card-holder { color: rgba(255,255,255,.85); text-shadow: 0 1px 3px rgba(0,0,0,.6); }
 .card.has-bg .card-j, .card.has-bg .card-no { text-shadow: 0 1px 4px rgba(0,0,0,.7); }
@@ -788,10 +792,19 @@ function startDrawTimer() {
 }
 // 解密過的圖片留著，切分頁不用重新解密
 const IMG_CACHE = new Map();
-const cachedImage = path => { if (!IMG_CACHE.has(path)) IMG_CACHE.set(path, loadImage(path)); return IMG_CACHE.get(path); };
+const cachedImage = path => {
+  if (!IMG_CACHE.has(path)) IMG_CACHE.set(path, loadImage(path).catch(e => { IMG_CACHE.delete(path); throw e; }));   // 失敗的不留著，下次重新抓
+  return IMG_CACHE.get(path);
+};
 function hydrateImages() {
   document.querySelectorAll("[data-img]").forEach(el => cachedImage(el.dataset.img)
-    .then(u => { el.innerHTML = `<img src="${u}" alt="">`; }).catch(() => {}));
+    .then(u => {
+      el.innerHTML = `<img src="${u}" alt="">`;
+      if (!el.classList.contains("card-bg")) return;
+      const img = el.firstChild;
+      const fit = () => { if (img.naturalWidth / img.naturalHeight < 1.3) { el.style.setProperty("--bg-img", `url("${u}")`); el.classList.add("fit"); } };
+      img.complete && img.naturalWidth ? fit() : (img.onload = fit);
+    }).catch(() => {}));
 }
 
 /* ===== 收支分析：依分類統計 ❤️❤️基金的收入與支出 ===== */
