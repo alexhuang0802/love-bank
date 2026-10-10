@@ -253,6 +253,8 @@ input { width: 100%; background: var(--ink); border: 1px solid var(--line); bord
 .polaroid.big { position: static; flex: 0 0 min(84vw, 380px); width: auto; padding: 10px 10px 34px; scroll-snap-align: center;
   transform: rotate(-2deg); min-height: 200px; }
 .polaroid.big:nth-child(even) { transform: rotate(2deg); }
+.polaroid.big.redrop { animation: drop .8s cubic-bezier(.2,.8,.2,1) both; }
+.pola-strip { position: relative; }
 .polaroid.big img { aspect-ratio: auto; width: 100%; height: auto; max-height: 62vh; object-fit: contain; }
 .dots { display: flex; gap: 7px; }
 .dots i { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
@@ -944,10 +946,30 @@ function welcomeBack() {
   // 只有按鈕或點照片外的空白處才進入，避免左右滑照片時誤觸
   el.addEventListener("click", e => { if (e.target === el || e.target.closest("#enter-bank")) el.remove(); });
   const strip = $(".pola-strip", el), dots = el.querySelectorAll(".dots i");
+  let cur = 0;
   strip.addEventListener("scroll", () => {
-    const i = Math.round(strip.scrollLeft / strip.firstElementChild.offsetWidth);
-    dots.forEach((d, j) => d.classList.toggle("on", j === i));
+    const step = strip.firstElementChild.offsetWidth + 22; // 照片寬 + 間距
+    cur = Math.round(strip.scrollLeft / step);
+    dots.forEach((d, j) => d.classList.toggle("on", j === cur));
   }, { passive: true });
+
+  // 自動輪播：每 3.5 秒換下一張，照片重新「掉」下來；手動滑動後暫停 8 秒
+  if (photos.length > 1) {
+    const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    let pausedUntil = 0;
+    const go = i => {
+      const f = strip.querySelectorAll(".polaroid")[i]; if (!f) return;
+      strip.scrollTo({ left: f.offsetLeft - (strip.clientWidth - f.offsetWidth) / 2, behavior: reduce ? "auto" : "smooth" });
+      f.classList.remove("redrop"); void f.offsetWidth; f.classList.add("redrop");
+    };
+    const timer = setInterval(() => {
+      if (!el.isConnected) return clearInterval(timer);
+      if (Date.now() < pausedUntil) return;
+      go((cur + 1) % strip.querySelectorAll(".polaroid").length);
+    }, 3500);
+    strip.addEventListener("pointerdown", () => { pausedUntil = Date.now() + 8000; });
+    strip.addEventListener("touchstart", () => { pausedUntil = Date.now() + 8000; }, { passive: true });
+  }
   photos.forEach((p, i) => loadImage(p)
     .then(u => { el.querySelector(`.polaroid[data-i="${i}"]`).innerHTML = `<img src="${u}" alt="我們的合照 ${i + 1}">`; })
     .catch(() => el.querySelector(`.polaroid[data-i="${i}"]`)?.remove()));
