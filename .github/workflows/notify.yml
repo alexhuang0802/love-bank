@@ -1,8 +1,9 @@
 name: 抽卡通知
 
 on:
-  schedule:
-    - cron: "*/15 * * * *"   # 每 15 分鐘檢查一次（GitHub 排程可能延遲幾分鐘）
+  # 推播還沒開（缺 VAPID 金鑰），先暫停排程；要開通知時把下面兩行的 # 拿掉
+  # schedule:
+  #   - cron: "*/15 * * * *"   # 每 15 分鐘檢查一次（GitHub 排程可能延遲幾分鐘）
   workflow_dispatch:
 
 jobs:
