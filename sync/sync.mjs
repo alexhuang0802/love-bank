@@ -8,6 +8,7 @@ const DS = {
   expense: "1e68718e-66c1-81b7-81d0-000b62860e67",
   stocks:  "32b8718e-66c1-8038-8ebb-000beee610f8",
   perks:   "64325c42-b28e-4247-89c9-542c33350347", // 🎁 權益清單
+  anniv:   "7edd66d2-8aa9-4d39-b81f-638339995a49", // 💞 紀念日
 };
 const TEMPLATE_ROWS = new Set(["Acme Inc. Salary", "Emca Inc. Salary", "Dividents"]);
 const OUT = new URL("../data.enc.json", import.meta.url);
@@ -194,11 +195,17 @@ for (const { id, properties: p } of (await queryAll(DS.perks))
 const keep = new Set(Object.values(imageIndex));
 for (const f of await readdir(IMG_DIR)) if (f.endsWith(".enc") && !keep.has(f)) await unlink(new URL(f, IMG_DIR));
 
+// 紀念日：首頁「在一起第幾天」與倒數
+const anniversaries = (await queryAll(DS.anniv)).map(({ properties: p }) => ({
+  title: text(p["名稱"]), date: date(p["日期"]), em: text(p["圖示"]),
+  together: !!p["在一起"]?.checkbox, yearly: !!p["每年"]?.checkbox,
+})).filter(a => a.title && a.date);
+
 const txns = recent.map(({ id, ...t }) => t);
 const data = {
   updatedAt: new Date().toISOString(), fundName: "❤️❤️基金",
   cash, month, stocks, stockValue, total: cash.balance + stockValue, txns,
-  stats: { byMonth }, imageIndex, photos, perks, mortgage,
+  stats: { byMonth }, imageIndex, photos, perks, mortgage, anniversaries,
 };
 
 const { iv, ct } = await encrypt(new TextEncoder().encode(JSON.stringify(data)));
