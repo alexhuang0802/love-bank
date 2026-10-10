@@ -712,7 +712,7 @@ function renderGame() {
       : `<button class="btn pri draw-btn" data-draw>抽一張 ✦</button>`}
     ${boosts ? `<label class="boost-opt"><input type="checkbox" id="use-boost"> 使用傳說機率提升券（持有 ${boosts}）</label>` : ""}
     ${notifyHint()}
-    <span class="fresh">每 12 小時抽一次・每抽 +10 點・${d.forced ? `下一抽必中${d.forced} ✨` : d.pityLabel ? `再 ${d.pityLeft} 抽內必中${d.pityLabel}` : ""}</span>
+    <span class="fresh">每 12 小時抽一次</span>
   </section>
 
   <section class="sec"><div class="sec-head"><h2>我的手牌</h2><span class="label">${groups.reduce((s, g) => s + g.cards.length, 0)} 張</span></div>
