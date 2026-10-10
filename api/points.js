@@ -22,9 +22,7 @@ const DRAW_COOLDOWN = 12 * 3600e3, DRAW_REWARD = 10, MAX_COPIES = 3;
 const STARTER_DRAWS = 6, STARTER_MIN_CARDS = 2, STARTER_POINTS = 1314;   // 開戶新手禮包：免費 6 抽，至少 2 張權益卡，送 1,314 點
 // 機率與保底以 Notion「⚙️ 抽卡設定」為準；讀不到時用這組預設
 const DEFAULT_ODDS = { miss: 50, 普通: 28, 稀有: 14, 傳說: 5, 指定: 3 };       // %
-const DEFAULT_PITY = [{ rarity: '傳說', every: 10 }];                         // 每 N 抽至少一張這個稀有度（或更好）
-const RANK = { miss: 0, 普通: 1, 稀有: 2, 傳說: 3, 指定: 4 };
-let CFG = { odds: DEFAULT_ODDS, pity: DEFAULT_PITY };
+let CFG = { odds: DEFAULT_ODDS };
 const RARITY = { 普通: { pts: 20, days: 90 }, 稀有: { pts: 60, days: 90 }, 傳說: { pts: 200, days: 180 }, 指定: { pts: 300, days: 180 } };
 const SHOP = { boost: { title: '傳說機率提升券', price: 300, rarity: '道具' }, wild: { title: '指定卡', price: 1000, rarity: '指定' } };
 const BIRTHDAY = '04-08';      // 小嘟嘟生日
@@ -66,9 +64,8 @@ async function loadConfig() {
     const odds = { miss: 0, 普通: 0, 稀有: 0, 傳說: 0, 指定: 0 };
     for (const r of rows.filter(r => r.type === '機率' && r.pct >= 0)) odds[r.rarity === '沒中' ? 'miss' : r.rarity] = r.pct;
     const sum = Object.values(odds).reduce((a, b) => a + b, 0);
-    const pity = rows.filter(r => r.type === '保底' && RANK[r.rarity] > 0 && r.every >= 1).map(r => ({ rarity: r.rarity, every: Math.round(r.every) }));
-    CFG = { odds: sum > 0 ? Object.fromEntries(Object.entries(odds).map(([k, v]) => [k, v * 100 / sum])) : DEFAULT_ODDS, pity };
-  } catch { CFG = { odds: DEFAULT_ODDS, pity: DEFAULT_PITY }; }
+    CFG = { odds: sum > 0 ? Object.fromEntries(Object.entries(odds).map(([k, v]) => [k, v * 100 / sum])) : DEFAULT_ODDS };
+  } catch { CFG = { odds: DEFAULT_ODDS }; }
 }
 function roll(odds) {
   let r = randomInt(0, 1_000_000) / 10_000;
@@ -142,6 +139,7 @@ async function listPerks() {
       // Notion「稀有度」欄位優先；空白才用點數判斷
       rarity: ['普通', '稀有', '傳說'].includes(p['稀有度']?.select?.name) ? p['稀有度'].select.name : rarityOf(p['點數']?.number ?? 0),
       guaranteed: !!p['新手必中']?.checkbox,
+      pityEvery: p['保底抽數']?.number >= 1 ? Math.round(p['保底抽數'].number) : null,   // 每 N 抽一定會抽到這張
     }));
 }
 // 舊版「兌換」扣點的紀錄不再算進餘額（改成抽卡制之前的資料）
@@ -170,21 +168,23 @@ async function dismantle(card, note) {
   return pts;
 }
 
-function drawState(rows) {
+function drawState(rows, perks) {
   const draws = rows.filter(r => r.type === '抽卡');            // 新到舊
   const last = draws[0] ? Date.parse(draws[0].at) : 0;
-  // 每條保底：距離上一次抽到「這個稀有度或更好」已經幾抽
-  const pity = CFG.pity.map(p => {
-    const i = draws.findIndex(r => (RANK[r.note] ?? 0) >= RANK[p.rarity]);
+  // 卡片保底：距離上一次抽到這張卡已經幾抽（Notion 權益清單「保底抽數」）
+  const pity = perks.filter(p => p.pityEvery).map(p => {
+    const i = draws.findIndex(r => r.perkId === p.id);
     const since = i === -1 ? draws.length : i;
-    return { ...p, since, left: Math.max(1, p.every - since) };
+    return { perk: p, every: p.pityEvery, since, left: Math.max(1, p.pityEvery - since) };
   });
-  // 這一抽必須給的稀有度（多條同時觸發時取最高）
-  const forced = pity.filter(p => p.since >= p.every - 1).sort((a, b) => RANK[b.rarity] - RANK[a.rarity])[0]?.rarity ?? null;
-  const show = [...pity].sort((a, b) => RANK[b.rarity] - RANK[a.rarity])[0];
+  // 這一抽必須給的卡：slack = 最晚還能等幾抽。依 slack 排序，若第 k 張的 slack ≤ k，
+  // 代表接下來幾抽已經排不下所有保底卡，就先給最急的那張（多張卡同時到期也不會有人遲到）
+  const bySlack = pity.map(x => ({ ...x, slack: x.every - 1 - x.since })).sort((a, b) => a.slack - b.slack);
+  const forced = bySlack.some((x, k) => x.slack <= k) ? bySlack[0].perk : null;
+  const show = [...pity].sort((a, b) => a.left - b.left)[0];
   const [mult, reason] = wildBoost();
   return { nextAt: last ? new Date(last + DRAW_COOLDOWN).toISOString() : null, forced,
-    pityLabel: show?.rarity ?? null, pityLeft: show?.left ?? null, wildMult: mult, wildReason: reason };
+    pityLabel: show?.perk.title ?? null, pityLeft: show?.left ?? null, wildMult: mult, wildReason: reason };
 }
 
 export default async function handler(req, res) {
@@ -224,15 +224,17 @@ export default async function handler(req, res) {
 
     // ===== 抽卡 =====
     if (body.action === 'draw') {
-      const st = drawState(rows);
+      const st = drawState(rows, perks);
       if (st.nextAt && Date.parse(st.nextAt) > Date.now()) return fail(429, 'cooldown', { nextAt: st.nextAt });
       const boostCard = body.useBoost ? hand.find(c => c.perkId === 'boost' && c.status === '手牌') : null;
       if (body.useBoost && !boostCard) return fail(409, 'no_boost');
 
       let kind = roll(oddsFor({ boost: !!boostCard }));
-      if (st.forced && RANK[kind] < RANK[st.forced]) kind = st.forced;   // 保底觸發
       let perk = null, overflow = 0;
-      if (kind in RARITY && kind !== '指定') {
+      if (st.forced) {   // 卡片保底觸發：這抽一定是那張卡
+        perk = st.forced; kind = perk.rarity;
+        if (hand.filter(c => c.perkId === perk.id && c.status === '手牌').length >= MAX_COPIES) overflow = RARITY[kind].pts;
+      } else if (kind in RARITY && kind !== '指定') {
         const all = perks.filter(p => p.rarity === kind);
         if (!all.length) kind = 'miss';   // 卡池裡沒有這個稀有度的卡
         else {
@@ -346,7 +348,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       opening: OPENING_BONUS, balance: balanceOf(rows), rows, starterClaimed: rows.some(r => r.type === '新手禮包'),
       hand: hand.filter(c => ['手牌', '已發動', '已核銷'].includes(c.status)),
-      perks, draw: { ...drawState(rows), odds: oddsFor() }, shop: SHOP, dismantlePts: Object.fromEntries(Object.entries(RARITY).map(([k, v]) => [k, v.pts])),
+      perks, draw: (st => ({ ...st, forced: st.forced?.title ?? null, odds: oddsFor() }))(drawState(rows, perks)), shop: SHOP, dismantlePts: Object.fromEntries(Object.entries(RARITY).map(([k, v]) => [k, v.pts])),
       expiredNow: expired.map(c => c.title),
     });
   } catch (e) {
