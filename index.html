@@ -1333,7 +1333,7 @@ function intro() {
   const photo = FUND?.photos?.[0];
   el.innerHTML = `<div class="intro-stage">${cardHTML()}${photo ? `<figure class="polaroid"><span class="fresh">…</span></figure>` : ""}</div>
     <h2>歡迎${esc(CONFIG.customer)}</h2>
-    <p>${esc(CONFIG.bankName)} 今天正式開業。開戶禮在「抽卡」等妳開包。</p>
+    <p>${esc(CONFIG.bankName)} 今天正式開業。</p>
     <button class="btn pri" id="activate" style="min-width:200px">啟用我的卡片</button>`;
   document.body.appendChild(el);
   // 合照放在卡片右下角，像拍立得夾在卡片上；圖片跟交易圖片一樣是加密的
