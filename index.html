@@ -138,6 +138,28 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .odds { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
 .odds summary { cursor: pointer; font-size: 14px; }
 .odds p { margin-top: 8px; line-height: 1.6; }
+/* 開戶新手禮包 */
+.starter { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 14px; text-align: left; cursor: pointer;
+  border: 1.5px solid #e58fb4; background: linear-gradient(120deg, rgba(229,143,180,.18), rgba(201,177,126,.12)); box-shadow: 0 0 22px rgba(229,143,180,.25); }
+.starter .st-em { font-size: 30px; }
+.starter .st-t { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.starter .st-t span { font-size: 12px; color: var(--muted); }
+.starter .st-go { padding: 7px 14px; border-radius: 99px; background: #e58fb4; color: #2b0f1a; font-weight: 700; font-size: 13px; }
+.sp-title { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 24px; position: relative; }
+.sp-grid { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: min(360px, 100%); }
+.sp-card { aspect-ratio: 59 / 86; perspective: 700px; animation: rise .4s calc(var(--d) - .35s) ease-out both; }
+.sp-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; transform: rotateY(180deg); animation: spflip .6s var(--d) ease-in-out both; }
+@keyframes spflip { from { transform: rotateY(0); } to { transform: rotateY(180deg); } }
+.sp-face { position: absolute; inset: 0; border-radius: 8px; backface-visibility: hidden; -webkit-backface-visibility: hidden; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 6px; text-align: center; overflow: hidden; }
+.sp-back { border: 2px solid var(--gold); background: repeating-conic-gradient(#1a1712 0 10deg, #0e0c09 10deg 20deg); }
+.sp-back span { width: 40%; aspect-ratio: 1; border-radius: 50%; border: 1.5px solid var(--gold); display: grid; place-items: center; font-family: var(--f-display); font-weight: 700; color: var(--gold); background: #0b0b0d; }
+.sp-front { transform: rotateY(180deg); background: var(--panel); border: 2px solid var(--rc); box-shadow: 0 0 18px color-mix(in srgb, var(--rc) 55%, transparent); }
+.sp-front.sp-front b { font-size: 11px; line-height: 1.3; font-weight: 500; }
+.sp-front small { font-size: 9.5px; line-height: 1.4; color: #4a1d2e; }
+.sp-card.r-miss .sp-front { background: linear-gradient(160deg, #fbe3ec, #f2b8cd); }
+.sp-em { font-size: 26px; }
+.sp-rar { position: absolute; top: 4px; left: 6px; font-size: 9px; color: var(--rc); }
+
 /* 抽卡動畫：卡背光暈依稀有度 */
 .summon.draw .face.back { border-color: var(--rc); box-shadow: 0 0 50px var(--rc); }
 .summon.draw .rays { background: repeating-conic-gradient(color-mix(in srgb, var(--rc) 22%, transparent) 0 6deg, transparent 6deg 18deg); }
@@ -676,6 +698,8 @@ function renderGame() {
   const odds = d.odds, pct = v => (Math.round(v * 10) / 10) + "%";
 
   return `${head}
+  ${GAME.starterClaimed === false ? `<button class="starter" data-starter>
+    <span class="st-em">🎁</span><span class="st-t"><b>開戶新手禮包</b><span>免費 6 抽，保證至少 2 張權益卡</span></span><span class="st-go">開包</span></button>` : ""}
   <section class="draw-box">
     <div class="deck" aria-hidden="true"><span>${esc(CONFIG.mono)}</span></div>
     ${d.wildMult > 1 ? `<span class="pill boost">🌟 今天是${esc(d.wildReason)}，指定卡機率 ×${d.wildMult}</span>` : ""}
@@ -984,6 +1008,44 @@ function sheet(html, bind) {
   document.body.appendChild(s); bind && bind(s); return s;
 }
 
+/* ===== 開戶新手禮包：6 張卡依序翻開 ===== */
+async function doStarter() {
+  if (drawing) return; drawing = true;
+  const btn = $("[data-starter]"); if (btn) { btn.disabled = true; $(".st-go", btn).textContent = "拆包中…"; }
+  try {
+    const { results } = await pointsCall({ action: "starter" });
+    await syncPoints();
+    playStarter(results);
+  } catch (e) {
+    toast(e.status === 409 ? "新手禮包已經領過了" : "連不上銀行，請稍後再試");
+    await syncPoints();
+  } finally { drawing = false; }
+}
+function playStarter(results) {
+  const cards = results.filter(r => r.kind !== "miss").length;
+  const el = document.createElement("div"); el.className = "summon starter-open"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true");
+  el.innerHTML = `<div class="rays" aria-hidden="true"></div>
+    <h2 class="sp-title">開戶新手禮包</h2>
+    <div class="sp-grid">${results.map((r, i) => {
+      const info = r.perkId ? perkInfo(r.perkId) : {}, cls = r.kind === "miss" ? "r-miss" : RCLS[r.kind];
+      return `<div class="sp-card ${cls}" style="--d:${0.5 + i * 0.45}s"><div class="sp-inner">
+        <div class="sp-face sp-back"><span>${esc(CONFIG.mono)}</span></div>
+        <div class="sp-face sp-front">${r.kind === "miss"
+          ? `<span class="sp-em">💌</span><small>${esc(r.line)}</small>`
+          : `<span class="sp-rar">${r.kind}</span><span class="sp-em">${r.kind === "指定" ? "🌟" : esc(info.em || "🎴")}</span><b>${esc(r.kind === "指定" ? "指定卡" : r.title)}</b>`}</div>
+      </div></div>`; }).join("")}</div>
+    <div class="summon-after" style="animation-delay:${0.9 + results.length * 0.45}s">
+      <span class="fresh">獲得 ${cards} 張權益卡${results.length - cards ? `、${results.length - cards} 句情話` : ""}，已收進手牌</span>
+      <button class="btn pri" data-close>${results.some(r => r.kind === "指定") ? "去挑指定卡" : "收下"}</button></div>`;
+  el.addEventListener("click", e => {
+    if (!e.target.closest("[data-close]")) return;
+    el.remove();
+    const wild = results.find(r => r.kind === "指定" && r.cardId);
+    if (wild) chooseWild(wild.cardId);
+  });
+  document.body.appendChild(el);
+}
+
 /* ===== 抽卡動作 ===== */
 let drawing = false;
 async function doDraw() {
@@ -1224,7 +1286,7 @@ function intro() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-txn],[data-card],[data-draw],[data-buy],#logo,#logout,#house-edit,#q-vouch,#q-cs"); if (!t) return;
+  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-txn],[data-card],[data-draw],[data-starter],[data-buy],#logo,#logout,#house-edit,#q-vouch,#q-cs"); if (!t) return;
   if (t.dataset.range) { statRange = t.dataset.range; render(); return; }
   if (t.id === "house-edit") { editHouse(); return; }
   if (t.dataset.txn) { showImages(FUND.txns[Number(t.dataset.txn)]); return; }
@@ -1234,6 +1296,7 @@ document.addEventListener("click", e => {
   else if (t.dataset.go) go(t.dataset.go);
   else if (t.dataset.card) cardSheet(t.dataset.card);
   else if (t.dataset.draw !== undefined) doDraw();
+  else if (t.dataset.starter !== undefined) doStarter();
   else if (t.dataset.buy) buyItem(t.dataset.buy);
   else if (t.id === "logo") logoTap();
   else if (t.id === "q-vouch") { hist = "points"; go("history"); }

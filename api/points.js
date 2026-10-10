@@ -18,6 +18,7 @@ const NOTION = { 'Notion-Version': '2025-09-03', 'Content-Type': 'application/js
 
 // ===== 遊戲規則 =====
 const DRAW_COOLDOWN = 12 * 3600e3, DRAW_REWARD = 10, PITY = 10, MAX_COPIES = 3;
+const STARTER_DRAWS = 6, STARTER_MIN_CARDS = 2;   // 開戶新手禮包：免費 6 抽，至少 2 張權益卡
 const BASE_ODDS = { miss: 40, 普通: 35, 稀有: 17, 傳說: 5, 指定: 3 };          // %
 const RARITY = { 普通: { pts: 20, days: 90 }, 稀有: { pts: 60, days: 90 }, 傳說: { pts: 200, days: 180 }, 指定: { pts: 300, days: 180 } };
 const SHOP = { boost: { title: '傳說機率提升券', price: 300, rarity: '道具' }, wild: { title: '指定卡', price: 1000, rarity: '指定' } };
@@ -224,6 +225,35 @@ export default async function handler(req, res) {
         reward: DRAW_REWARD, nextAt: new Date(Date.now() + DRAW_COOLDOWN).toISOString(),
       });
     }
+    // ===== 開戶新手禮包：只能領一次，不影響 12 小時冷卻 =====
+    if (body.action === 'starter') {
+      if (rows.some(r => r.type === '新手禮包')) return fail(409, 'claimed');
+      const held = id => hand.filter(c => c.perkId === id && c.status === '手牌').length;
+      const results = [];
+      let cards = 0;
+      for (let i = 0; i < STARTER_DRAWS; i++) {
+        const left = STARTER_DRAWS - i, need = STARTER_MIN_CARDS - cards;
+        let kind = roll(oddsFor());
+        if (kind === 'miss' && need >= left) {   // 剩下的抽數剛好等於還差的卡數：這抽一定要是卡
+          const o = oddsFor(); delete o.miss;
+          kind = roll(Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v * 100 / Object.values(o).reduce((a, b) => a + b, 0)])));
+        }
+        let perk = null;
+        if (kind !== 'miss' && kind !== '指定') {
+          const all = perks.filter(p => p.rarity === kind), room = all.filter(p => held(p.id) < MAX_COPIES);
+          perk = room.length ? room[randomInt(room.length)] : null;
+          if (!perk) { const any = perks.filter(p => held(p.id) < MAX_COPIES); perk = any.length ? any[randomInt(any.length)] : null; kind = perk ? perk.rarity : 'miss'; }
+        }
+        let cardId = null;
+        if (kind === '指定') cardId = (await addCard({ title: '指定卡', perkId: 'wild', rarity: '指定' })).id;
+        else if (perk) { cardId = (await addCard({ title: perk.title, perkId: perk.id, rarity: kind })).id; hand.push({ perkId: perk.id, status: '手牌' }); }
+        if (kind !== 'miss') cards++;
+        results.push({ kind, rarity: kind === 'miss' ? null : kind, perkId: perk?.id ?? null, title: perk?.title ?? (kind === '指定' ? '指定卡' : ''),
+          line: kind === 'miss' ? LOVE_LINES[randomInt(LOVE_LINES.length)] : '', cardId });
+      }
+      await addRow({ type: '新手禮包', title: `開戶新手禮包・${STARTER_DRAWS} 抽`, amount: 0, note: `${cards} 張卡` });
+      return res.status(200).json({ results });
+    }
     // ===== 發動手牌 =====
     if (body.action === 'play') {
       const c = card(body.id);
@@ -278,7 +308,7 @@ export default async function handler(req, res) {
       rows.splice(0, rows.length, ...r2); hand.splice(0, hand.length, ...h2);
     }
     return res.status(200).json({
-      opening: OPENING_BONUS, balance: balanceOf(rows), rows,
+      opening: OPENING_BONUS, balance: balanceOf(rows), rows, starterClaimed: rows.some(r => r.type === '新手禮包'),
       hand: hand.filter(c => ['手牌', '已發動', '已核銷'].includes(c.status)),
       perks, draw: { ...drawState(rows), odds: oddsFor() }, shop: SHOP, dismantlePts: Object.fromEntries(Object.entries(RARITY).map(([k, v]) => [k, v.pts])),
       expiredNow: expired.map(c => c.title),
