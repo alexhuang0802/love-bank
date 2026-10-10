@@ -137,8 +137,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .duel-title { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 4px;
   background: rgba(255,250,235,.55); border: 1px solid rgba(60,40,10,.35); font-size: 14px; }
 .duel-title b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.duel-art { flex: 1; min-height: 0; display: grid; place-items: center; background: #0b0b0d; border: 3px solid #5a4421; border-radius: 3px; overflow: hidden; }
-.duel-art img { width: 100%; height: 100%; object-fit: contain; display: block; } /* 整張照片顯示，不裁切 */
+.duel-art { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; background: #0b0b0d; border: 3px solid #5a4421; border-radius: 3px; overflow: hidden; }
+.duel-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; } /* 整張照片塞進框內，不裁切 */
 .duel-em { font-size: 64px; }
 .duel-type { font-size: 11px; font-weight: 700; }
 .duel-desc { font-size: 12px; line-height: 1.45; padding: 6px 8px; min-height: 52px; border-radius: 3px; background: rgba(255,250,235,.6); border: 1px solid rgba(60,40,10,.3); }
