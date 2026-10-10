@@ -100,20 +100,20 @@ const mortgage = {
 const recent = [...income, ...expense].filter(t => t.date)
   .sort((a, b) => b.date.localeCompare(a.date)).slice(0, 30);
 
-// 分類統計：每月 × 每個分類的金額（正數），給「收支分析」頁用
+// 分類統計：每月 × 每個分類的金額（正數），給「收支分析」頁用；沒選分類的不算
 const byMonth = {};
 for (const [kind, rows] of [["income", income], ["expense", expense]]) {
   for (const t of rows) {
-    if (!t.date) continue;
+    if (!t.date || !t.tag) continue;
     const m = (byMonth[t.date.slice(0, 7)] ??= { income: {}, expense: {} })[kind];
-    const k = t.tag || "未分類";
+    const k = t.tag;
     m[k] = (m[k] ?? 0) + Math.abs(t.amount);
   }
 }
 // 「開帳」是一次性的期初資金，算月平均收入時要扣掉（跟記帳網站同一套規則）
 for (const t of income) {
-  if (!t.date || t.title !== "開帳") continue;
-  const m = byMonth[t.date.slice(0, 7)], k = t.tag || "未分類";
+  if (!t.date || !t.tag || t.title !== "開帳") continue;
+  const m = byMonth[t.date.slice(0, 7)], k = t.tag;
   m.opening = (m.opening ?? 0) + t.amount;
   (m.openingByTag ??= {})[k] = (m.openingByTag[k] ?? 0) + t.amount;
 }
