@@ -114,6 +114,41 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .perk-art img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .perk-art .em { font-size: 44px; }
 
+/* 抽卡 */
+.draw-box { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 22px 16px; text-align: center;
+  background: radial-gradient(circle at 50% 30%, #1d1a14, var(--panel) 70%); border: 1px solid var(--line); border-radius: 16px; }
+.deck { width: 96px; aspect-ratio: 59 / 86; border-radius: 9px; border: 2px solid var(--gold); display: grid; place-items: center;
+  background: repeating-conic-gradient(#1a1712 0 10deg, #0e0c09 10deg 20deg); box-shadow: 4px 4px 0 -1px #0e0c09, 4px 4px 0 0 var(--gold), 8px 8px 0 -1px #0e0c09, 8px 8px 0 0 var(--gold), 0 0 30px rgba(201,177,126,.25); }
+.deck span { width: 44px; aspect-ratio: 1; border-radius: 50%; border: 1.5px solid var(--gold); display: grid; place-items: center; font-family: var(--f-display); font-weight: 700; font-size: 22px; color: var(--gold); background: #0b0b0d; }
+.draw-btn { min-width: 200px; font-size: 16px; }
+.boost-opt { display: flex; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+.boost-opt input { width: auto; }
+.pill.boost { border-color: #e58fb4; color: #e58fb4; }
+.hand { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.hcard { position: relative; aspect-ratio: 59 / 86; border-radius: 10px; padding: 8px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  background: var(--panel); border: 1.5px solid var(--rc, var(--line)); text-align: center; min-width: 0; }
+.hcard b { font-size: 12px; line-height: 1.3; font-weight: 500; overflow-wrap: anywhere; }
+.hc-em { font-size: 28px; }
+.hc-rar { position: absolute; top: 5px; left: 6px; font-size: 10px; color: var(--rc); }
+.hc-n { position: absolute; top: 4px; right: 6px; font-size: 11px; font-family: var(--f-mono); color: var(--text); }
+.hc-exp { font-size: 10px; color: var(--muted); } .hc-exp.soon { color: var(--minus); }
+.r-n { --rc: #a07d5a; } .r-sr { --rc: #a77bd6; } .r-ssr { --rc: #e2c27a; } .r-wild { --rc: #e58fb4; } .r-miss { --rc: #e58fb4; } .r-item { --rc: #7fa8d6; }
+.hcard.r-ssr { box-shadow: 0 0 14px rgba(226,194,122,.35); } .hcard.r-wild { box-shadow: 0 0 14px rgba(229,143,180,.35); }
+.pill.r-n, .pill.r-sr, .pill.r-ssr, .pill.r-wild { border-color: var(--rc); color: var(--rc); }
+.odds { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+.odds summary { cursor: pointer; font-size: 14px; }
+.odds p { margin-top: 8px; line-height: 1.6; }
+/* 抽卡動畫：卡背光暈依稀有度 */
+.summon.draw .face.back { border-color: var(--rc); box-shadow: 0 0 50px var(--rc); }
+.summon.draw .rays { background: repeating-conic-gradient(color-mix(in srgb, var(--rc) 22%, transparent) 0 6deg, transparent 6deg 18deg); }
+.summon.draw.r-ssr .flash { background: #fff3cf; }
+.summon.draw.r-n .rays, .summon.draw.r-miss .rays { opacity: .5; }
+.face.front.love-card { transform: rotateY(180deg); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 22px 16px; text-align: center;
+  background: linear-gradient(160deg, #fbe3ec, #f2b8cd 60%, #e58fb4); color: #4a1d2e; box-shadow: 0 0 60px rgba(229,143,180,.55); }
+.face.front.love-card .lc-em { font-size: 54px; }
+.face.front.love-card p { font-size: 15px; line-height: 1.7; font-weight: 500; }
+.face.front.love-card .duel-foot { position: absolute; bottom: 10px; left: 12px; right: 12px; }
+
 /* 出牌動畫 */
 .summon { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px;
   padding: 24px 16px calc(24px + env(safe-area-inset-bottom, 0px)); background: radial-gradient(circle at 50% 42%, #1d1a14 0%, #050506 70%); overflow: hidden; }
@@ -277,7 +312,7 @@ input { width: 100%; background: var(--ink); border: 1px solid var(--line); bord
 <div class="app" id="app"></div>
 <div class="tabs"><nav id="tabs">
   <button data-tab="home" aria-current="page"><span class="t-ico">◈</span>首頁</button>
-  <button data-tab="perks"><span class="t-ico">✦</span>權益兌換</button>
+  <button data-tab="perks"><span class="t-ico">✦</span>抽卡</button>
   <button data-tab="history"><span class="t-ico">≡</span>交易紀錄</button>
   <button data-tab="stats"><span class="t-ico">◔</span>收支分析</button>
   <button data-tab="house"><span class="t-ico">⌂</span>愛情小屋</button>
@@ -292,7 +327,7 @@ const CONFIG = {
   holderEn: "MY ONLY CUSTOMER",     // 卡面持卡人
   cardNo: "5208 •••• •••• 1314",
   since: "2026/10/05",              // 開戶日
-  openingBonus: 5201314,            // 開戶禮點數（改這裡，已開戶的手機也會自動補差額）
+  openingBonus: 1314,               // 開戶禮點數（要跟 api/points.js 的 OPENING_BONUS 一致）
   limitText: "無上限",
   pin: "0802",                      // 行員後台密碼（連點左上 logo 5 下）
   pointsApi: "https://love-bank-murex.vercel.app/api/points",                  // 雲端點數 API（Vercel 部署好後填 https://xxx.vercel.app/api/points），空白 = 只存在這支手機
@@ -416,7 +451,7 @@ function renderHome() {
     </div>
   </div>
   <div class="quick">
-    <button data-go="perks"><span class="ico">✦</span>兌換權益</button>
+    <button data-go="perks"><span class="ico">✦</span>抽卡</button>
     <button data-go="history"><span class="ico">≡</span>交易紀錄</button>
     <button id="q-vouch"><span class="ico">◇</span>我的憑證</button>
     <button id="q-cs"><span class="ico">☏</span>專屬理專</button>
@@ -540,14 +575,16 @@ async function pointsCall(body) {
 }
 function applyCloud(j) {
   const t0 = state.txns.find(t => t.id === "t0");
+  GAME = j;
   state.balance = j.balance;
   state.txns = [
-    ...j.rows.map(r => r.type === "兌換"
-      ? { id: r.id, at: r.at, title: "兌換・" + r.title, note: "憑證 " + r.code, amount: r.amount }
-      : { id: r.id, at: r.at, title: r.title, note: r.note, amount: r.amount }),
+    ...j.rows.filter(r => r.type !== "兌換").map(r => ({ id: r.id, at: r.at, title: r.title, note: r.type === "抽卡" ? "" : r.note, amount: r.amount })),
     { id: "t0", at: t0?.at || now(), title: "生日開戶禮", note: "歡迎成為本行唯一客戶", amount: j.opening },
   ];
-  state.vouchers = j.rows.filter(r => r.type === "兌換").map(r => ({ id: r.id, perkId: r.perkId, title: r.title, code: r.code, at: r.at, used: r.used }));
+  state.vouchers = [
+    ...(j.hand || []).filter(c => c.status === "已發動" || c.status === "已核銷").map(c => ({ id: c.id, perkId: c.perkId, title: c.title, code: c.code, at: c.playedAt || c.at, used: c.status === "已核銷" })),
+    ...j.rows.filter(r => r.type === "兌換").map(r => ({ id: r.id, perkId: r.perkId, title: r.title, code: r.code, at: r.at, used: r.used })),
+  ].sort((a, b) => String(b.at).localeCompare(String(a.at)));
   save(); render();
 }
 async function syncPoints() {
@@ -609,13 +646,81 @@ async function boot() {
 
 // 權益清單以 Notion「🎁 權益清單」為準（同步進加密資料），沒有時才用 CONFIG.perks
 const perksList = () => FUND?.perks?.length ? FUND.perks : CONFIG.perks;
-function renderPerks() {
-  return `
-  <div class="hello"><small>可用點數 ${fmt(state.balance)} pts</small><h1>卡友權益</h1></div>
-  <div class="perks">${perksList().map(p => `
-    <button class="perk" data-perk="${p.id}" ${p.cost > state.balance ? "disabled" : ""}>
-      <span class="perk-art"><span class="em">${p.em}</span></span>
-      <b>${esc(p.title)}</b><span class="cost">${fmt(p.cost)} pts</span></button>`).join("")}</div>`;
+
+/* ===== 抽卡遊戲：每 12 小時抽一次，抽到的卡進手牌，發動不用點數；點數拿來買道具 ===== */
+let GAME = null;   // 雲端 API 回傳的完整狀態（手牌、抽卡冷卻、機率、商店）
+const RCLS = { 普通: "r-n", 稀有: "r-sr", 傳說: "r-ssr", 指定: "r-wild", 道具: "r-item" };
+// 卡片的圖示、說明、插圖來自加密資料裡的權益清單
+const perkInfo = id => perksList().find(p => p.id === id) || {};
+const inHand = () => (GAME?.hand || []).filter(c => c.status === "手牌");
+const daysLeft = d => d ? Math.ceil((Date.parse(d) - twToday()) / DAY) : null;
+function handGroups() {
+  const g = new Map();
+  for (const c of inHand().filter(c => c.rarity !== "道具")) {
+    const k = `${c.perkId}|${c.rarity}`;
+    if (!g.has(k)) g.set(k, { key: k, perkId: c.perkId, rarity: c.rarity, title: c.title, cards: [] });
+    g.get(k).cards.push(c);
+  }
+  const order = { 指定: 0, 傳說: 1, 稀有: 2, 普通: 3 };
+  return [...g.values()].map(x => ({ ...x, cards: x.cards.sort((a, b) => String(a.expires).localeCompare(String(b.expires))) }))
+    .sort((a, b) => order[a.rarity] - order[b.rarity]);
+}
+const clock = ms => { const s = Math.max(0, Math.floor(ms / 1000)); return [s / 3600 | 0, (s % 3600) / 60 | 0, s % 60].map(n => String(n).padStart(2, "0")).join(":"); };
+let drawTimer = null;
+function renderGame() {
+  const head = `<div class="hello"><small>可用點數 ${fmt(state.balance)} pts</small><h1>抽卡</h1></div>`;
+  if (!cloud()) return `${head}<div class="empty">抽卡需要連上銀行，請重新整理再試一次。</div>`;
+  if (!GAME?.draw) return `${head}<div class="empty">正在洗牌…</div>`;
+  const d = GAME.draw, wait = d.nextAt ? Date.parse(d.nextAt) - Date.now() : 0;
+  const boosts = inHand().filter(c => c.perkId === "boost").length, groups = handGroups();
+  const odds = d.odds, pct = v => (Math.round(v * 10) / 10) + "%";
+
+  return `${head}
+  <section class="draw-box">
+    <div class="deck" aria-hidden="true"><span>${esc(CONFIG.mono)}</span></div>
+    ${d.wildMult > 1 ? `<span class="pill boost">🌟 今天是${esc(d.wildReason)}，指定卡機率 ×${d.wildMult}</span>` : ""}
+    ${wait > 0 ? `<button class="btn ghost" disabled>下次抽卡 <span id="draw-timer">${clock(wait)}</span></button>`
+      : `<button class="btn pri draw-btn" data-draw>抽一張 ✦</button>`}
+    ${boosts ? `<label class="boost-opt"><input type="checkbox" id="use-boost"> 使用傳說機率提升券（持有 ${boosts}）</label>` : ""}
+    <span class="fresh">每 12 小時抽一次・每抽 +10 點・${d.pity >= d.pityAt ? "下一抽必中傳說 ✨" : `再 ${d.pityAt - d.pity} 抽內必中傳說`}</span>
+  </section>
+
+  <section class="sec"><div class="sec-head"><h2>我的手牌</h2><span class="label">${groups.reduce((s, g) => s + g.cards.length, 0)} 張</span></div>
+    ${groups.length ? `<div class="hand">${groups.map(g => {
+      const info = perkInfo(g.perkId), left = daysLeft(g.cards[0].expires);
+      return `<button class="hcard ${RCLS[g.rarity]}" data-card="${esc(g.key)}">
+        <span class="hc-rar">${g.rarity}</span>${g.cards.length > 1 ? `<span class="hc-n">×${g.cards.length}</span>` : ""}
+        <span class="hc-em">${g.rarity === "指定" ? "🌟" : esc(info.em || "🎴")}</span>
+        <b>${esc(g.rarity === "指定" ? "指定卡" : g.title)}</b>
+        ${left != null ? `<span class="hc-exp ${left <= 7 ? "soon" : ""}">⏳ ${left} 天</span>` : ""}
+      </button>`; }).join("")}</div>`
+      : `<div class="empty">手牌是空的，抽一張試試手氣吧。</div>`}
+  </section>
+
+  <section class="sec"><div class="sec-head"><h2>道具商店</h2><span class="label">${fmt(state.balance)} pts</span></div>
+    <div class="list">${Object.entries(GAME.shop).map(([k, it]) => `
+      <div class="row"><div class="meta"><b>${k === "boost" ? "📈" : "🌟"} ${esc(it.title)}${k === "boost" && boosts ? `<span class="tag">持有 ${boosts}</span>` : ""}</b>
+        <span>${k === "boost" ? "下一次抽卡，傳說機率 ×3" : "抽卡以外的保證：任選一張權益卡"}</span></div>
+        <button class="pill" data-buy="${k}" ${state.balance < it.price ? "disabled" : ""}>${fmt(it.price)} pts</button></div>`).join("")}</div>
+  </section>
+
+  <details class="odds"><summary>機率與規則</summary>
+    <div class="kv"><span>💌 沒中（送一句情話）</span><span>${pct(odds.miss)}</span></div>
+    <div class="kv"><span>🟫 普通卡</span><span>${pct(odds["普通"])}</span></div>
+    <div class="kv"><span>🟪 稀有卡</span><span>${pct(odds["稀有"])}</span></div>
+    <div class="kv"><span>🟨 傳說卡</span><span>${pct(odds["傳說"])}</span></div>
+    <div class="kv"><span>🌟 指定卡</span><span>${pct(odds["指定"])}</span></div>
+    <p class="fresh">指定卡機率：每月 14 號、聖誕節 ×2，生日當天 ×10，生日月 ×1.5（取最高）。同一張卡最多 3 張，滿了會自動分解成點數。普通、稀有 90 天、傳說與指定 180 天未使用會自動分解。</p>
+  </details>`;
+}
+function startDrawTimer() {
+  clearInterval(drawTimer);
+  if (tab !== "perks" || !GAME?.draw?.nextAt) return;
+  drawTimer = setInterval(() => {
+    const el = $("#draw-timer"), wait = Date.parse(GAME.draw.nextAt) - Date.now();
+    if (!el || tab !== "perks") return clearInterval(drawTimer);
+    if (wait <= 0) { clearInterval(drawTimer); render(); } else el.textContent = clock(wait);
+  }, 1000);
 }
 // 解密過的圖片留著，切分頁不用重新解密
 const IMG_CACHE = new Map();
@@ -855,11 +960,12 @@ function renderHistory() {
 }
 
 function render() {
-  $("#app").innerHTML = tab === "perks" ? renderPerks() : tab === "history" ? renderHistory() : tab === "stats" ? renderStats() : tab === "house" ? renderHouse() : renderHome();
+  $("#app").innerHTML = tab === "perks" ? renderGame() : tab === "history" ? renderHistory() : tab === "stats" ? renderStats() : tab === "house" ? renderHouse() : renderHome();
   if (tab === "house") loadHouse();
   document.querySelectorAll("#tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === tab ? "page" : "false"));
   bindCardTilt();
   if (CUR_KEY) hydrateImages();
+  startDrawTimer();
 }
 function go(t) { tab = t; render(); window.scrollTo(0, 0); }
 
@@ -878,28 +984,108 @@ function sheet(html, bind) {
   document.body.appendChild(s); bind && bind(s); return s;
 }
 
-function redeem(p) {
-  sheet(`<h3>${p.em} ${esc(p.title)}</h3>
-    <div><div class="kv"><span>扣除點數</span><span class="amt minus">−${fmt(p.cost)}</span></div>
-    <div class="kv"><span>兌換後餘額</span><span class="amt">${fmt(state.balance - p.cost)}</span></div></div>
-    <p>確定要發動嗎？卡牌一旦打出，就沒有反悔這回事。</p>
-    <div class="btns"><button class="btn ghost" data-close>再想想</button><button class="btn pri" id="ok">確認兌換</button></div>`, s => {
-    $("#ok", s).onclick = async () => {
-      if (cloud()) {
-        const b = $("#ok", s); b.disabled = true; b.textContent = "兌換中…";
-        try {
-          const { voucher } = await pointsCall({ action: "redeem", perkId: p.id, title: p.title, cost: p.cost });
-          await syncPoints(); s.remove(); playCard(p, voucher);
-        } catch (e) {
-          toast(e.status === 409 ? "點數不夠喔" : "連不上銀行，請稍後再試");
-          b.disabled = false; b.textContent = "確認兌換";
-        }
-        return;
-      }
-      const v = { id: "v" + Date.now(), perkId: p.id, title: p.title, code: code(), at: now(), used: false };
-      state.balance -= p.cost; state.vouchers.unshift(v);
-      state.txns.unshift({ id: "t" + Date.now(), at: v.at, title: "兌換・" + p.title, note: "憑證 " + v.code, amount: -p.cost });
-      save(); render(); s.remove(); playCard(p, v);
+/* ===== 抽卡動作 ===== */
+let drawing = false;
+async function doDraw() {
+  if (drawing) return; drawing = true;
+  const useBoost = !!$("#use-boost")?.checked;
+  const btn = $(".draw-btn"); if (btn) { btn.disabled = true; btn.textContent = "洗牌中…"; }
+  try {
+    const { result } = await pointsCall({ action: "draw", useBoost });
+    await syncPoints();
+    playDraw(result);
+  } catch (e) {
+    toast(e.status === 429 ? "還沒到下一次抽卡時間喔" : "連不上銀行，請稍後再試");
+    render();
+  } finally { drawing = false; }
+}
+// 抽卡動畫：卡背依稀有度發光 → 翻面 → 顯示抽到的卡（或一句情話）
+async function playDraw(r) {
+  const cls = r.kind === "miss" ? "r-miss" : RCLS[r.kind];
+  const info = r.perkId ? perkInfo(r.perkId) : {};
+  let art = `<span class="duel-em">${r.kind === "指定" ? "🌟" : esc(info.em || "🎴")}</span>`;
+  if (info.img) { try { art = `<img src="${await Promise.race([cachedImage(info.img), new Promise((_, x) => setTimeout(x, 2500))])}" alt="">`; } catch (e) {} }
+  const front = r.kind === "miss"
+    ? `<div class="face front love-card"><span class="lc-em">💌</span><p>${esc(r.line)}</p><span class="duel-foot"><span>${esc(CONFIG.bankName)}</span><span>LOVE</span></span></div>`
+    : `<div class="face front">
+        <div class="duel-title"><b>${esc(r.kind === "指定" ? "指定卡" : r.title)}</b><span>✦</span></div>
+        <div class="duel-art">${art}</div>
+        <div class="duel-type">【${r.kind}卡】</div>
+        <div class="duel-desc">${esc(r.kind === "指定" ? "可以換成任何一張權益卡，想要什麼自己挑。" : info.desc || "效果：持卡人想怎樣就怎樣。")}</div>
+        <div class="duel-foot"><span>${esc(CONFIG.bankName)}</span><span>${r.kind === "指定" ? "WILD" : r.kind === "傳說" ? "SSR" : r.kind === "稀有" ? "SR" : "N"}</span></div>
+      </div>`;
+  const after = r.kind === "miss" ? "這次沒抽到卡，+10 點"
+    : r.overflow ? `這張已經有 3 張了，自動分解 +${r.overflow} 點（另 +10 點）`
+    : `已收進手牌・+10 點${r.boosted ? "・提升券已使用" : ""}${r.pity ? "・保底觸發 ✨" : ""}`;
+  const el = document.createElement("div"); el.className = `summon draw ${cls}`; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true");
+  el.innerHTML = `<div class="rays" aria-hidden="true"></div><div class="flash" aria-hidden="true"></div>
+    <div class="duel-wrap"><div class="duel-card">
+      <div class="face back" aria-hidden="true"><span>${esc(CONFIG.mono)}</span></div>${front}
+    </div></div>
+    <div class="summon-after"><span class="label">${r.kind === "miss" ? "沒中" : r.kind === "傳說" ? "傳說卡！" : r.kind === "指定" ? "指定卡！" : r.kind + "卡"}</span>
+      <span class="fresh">${after}</span>
+      <button class="btn pri" data-close>${r.kind === "指定" ? "去挑一張" : "好"}</button></div>`;
+  el.addEventListener("click", e => {
+    if (!e.target.closest("[data-close]")) return;
+    el.remove();
+    if (r.kind === "指定" && r.cardId) chooseWild(r.cardId);
+  });
+  document.body.appendChild(el);
+}
+// 點手牌：發動／分解（指定卡：挑一張權益）
+function cardSheet(key) {
+  const g = handGroups().find(x => x.key === key); if (!g) return;
+  const c = g.cards[0], info = perkInfo(g.perkId), pts = GAME.dismantlePts?.[g.rarity] ?? 0, left = daysLeft(c.expires);
+  sheet(`<h3>${g.rarity === "指定" ? "🌟 指定卡" : `${esc(info.em || "🎴")} ${esc(g.title)}`}</h3>
+    <span class="pill ${RCLS[g.rarity]}">${g.rarity}${g.cards.length > 1 ? `・持有 ${g.cards.length} 張` : ""}</span>
+    <p>${esc(g.rarity === "指定" ? "可以換成任何一張權益卡。" : info.desc || "")}</p>
+    ${left != null ? `<div class="kv"><span>最快到期</span><span>${left} 天後（${day(c.expires)}）</span></div>` : ""}
+    <div class="kv"><span>分解可得</span><span class="amt plus">+${fmt(pts)} pts</span></div>
+    <div class="btns"><button class="btn ghost" id="c-dis">分解 1 張</button>
+      <button class="btn pri" id="c-go">${g.rarity === "指定" ? "挑一張權益" : "發動！"}</button></div>`, s => {
+    $("#c-go", s).onclick = async () => {
+      if (g.rarity === "指定") { s.remove(); return chooseWild(c.id); }
+      const b = $("#c-go", s); b.disabled = true; b.textContent = "發動中…";
+      try {
+        const { voucher } = await pointsCall({ action: "play", id: c.id });
+        await syncPoints(); s.remove();
+        playCard({ ...info, title: g.title, cost: info.cost ?? 0 }, voucher);
+      } catch (e) { b.disabled = false; b.textContent = "發動！"; toast("連不上銀行，請稍後再試"); }
+    };
+    const dis = $("#c-dis", s);
+    dis.onclick = async () => {
+      if (!dis.dataset.armed) { dis.dataset.armed = 1; dis.textContent = `確定分解？+${pts}`; return; }
+      dis.disabled = true;
+      try { await pointsCall({ action: "dismantle", id: c.id }); await syncPoints(); s.remove(); toast(`已分解，+${fmt(pts)} 點`); }
+      catch (e) { dis.disabled = false; toast("連不上銀行，請稍後再試"); }
+    };
+  });
+}
+// 指定卡：從卡池挑一張
+function chooseWild(cardId) {
+  const pool = (GAME?.perks || []);
+  sheet(`<h3>🌟 想要哪一張？</h3><div class="list">${pool.map(p => {
+      const info = perkInfo(p.id);
+      return `<div class="row"><div class="meta"><b>${esc(info.em || "🎴")} ${esc(p.title)}</b><span>${p.rarity}</span></div>
+        <button class="pill ${RCLS[p.rarity]}" data-pick="${p.id}">就這張</button></div>`; }).join("")}</div>
+    <button class="btn ghost" data-close>先留著，之後再挑</button>`, s => {
+    s.querySelectorAll("[data-pick]").forEach(b => b.onclick = async () => {
+      b.disabled = true;
+      try { await pointsCall({ action: "choose", id: cardId, perkId: b.dataset.pick }); await syncPoints(); s.remove(); toast("已換成指定的卡，收進手牌"); }
+      catch (e) { b.disabled = false; toast("連不上銀行，請稍後再試"); }
+    });
+  });
+}
+async function buyItem(item) {
+  const it = GAME?.shop?.[item]; if (!it) return;
+  sheet(`<h3>購買 ${esc(it.title)}</h3>
+    <div class="kv"><span>價格</span><span class="amt minus">−${fmt(it.price)} pts</span></div>
+    <div class="kv"><span>購買後剩下</span><span class="amt">${fmt(state.balance - it.price)} pts</span></div>
+    <div class="btns"><button class="btn ghost" data-close>再想想</button><button class="btn pri" id="b-ok">買</button></div>`, s => {
+    $("#b-ok", s).onclick = async () => {
+      const b = $("#b-ok", s); b.disabled = true;
+      try { await pointsCall({ action: "buy", item }); await syncPoints(); s.remove(); toast(`買到了：${it.title}`); if (item === "wild") { const w = inHand().find(c => c.rarity === "指定"); if (w) chooseWild(w.id); } }
+      catch (e) { b.disabled = false; toast(e.status === 409 ? "點數不夠喔" : "連不上銀行，請稍後再試"); }
     };
   });
 }
@@ -1038,7 +1224,7 @@ function intro() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-txn],[data-perk],#logo,#logout,#house-edit,#q-vouch,#q-cs"); if (!t) return;
+  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-txn],[data-card],[data-draw],[data-buy],#logo,#logout,#house-edit,#q-vouch,#q-cs"); if (!t) return;
   if (t.dataset.range) { statRange = t.dataset.range; render(); return; }
   if (t.id === "house-edit") { editHouse(); return; }
   if (t.dataset.txn) { showImages(FUND.txns[Number(t.dataset.txn)]); return; }
@@ -1046,7 +1232,9 @@ document.addEventListener("click", e => {
   if (t.dataset.hist) { hist = t.dataset.hist; if (!t.dataset.go) { render(); return; } }
   if (t.dataset.tab) go(t.dataset.tab);
   else if (t.dataset.go) go(t.dataset.go);
-  else if (t.dataset.perk) redeem(perksList().find(p => p.id === t.dataset.perk));
+  else if (t.dataset.card) cardSheet(t.dataset.card);
+  else if (t.dataset.draw !== undefined) doDraw();
+  else if (t.dataset.buy) buyItem(t.dataset.buy);
   else if (t.id === "logo") logoTap();
   else if (t.id === "q-vouch") { hist = "points"; go("history"); }
   else if (t.id === "q-cs") sheet(`<h3>專屬理專</h3><p>本行理專 24 小時待命，回覆速度視理專是否在打電動而定。</p>
