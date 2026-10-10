@@ -3,6 +3,12 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <meta name="theme-color" content="#0b0b0d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="嘟嘟銀行">
 <title>Private Bank 網銀</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -353,6 +359,7 @@ const CONFIG = {
   openingBonus: 0,                  // 開戶時沒有點數，開新手禮包才送 1,314 點（見 api/points.js）
   limitText: "無上限",
   pin: "0802",                      // 行員後台密碼（連點左上 logo 5 下）
+  vapidPublicKey: "",               // 推播公鑰（npx web-push generate-vapid-keys 的 Public Key），空白 = 不顯示通知按鈕
   pointsApi: "https://love-bank-murex.vercel.app/api/points",                  // 雲端點數 API（Vercel 部署好後填 https://xxx.vercel.app/api/points），空白 = 只存在這支手機
   perks: [
     { id: "dish",    em: "🍽️", title: "免洗碗一次",           cost: 520 },
@@ -703,6 +710,7 @@ function renderGame() {
     ${wait > 0 ? `<button class="btn ghost" disabled>下次抽卡 <span id="draw-timer">${clock(wait)}</span></button>`
       : `<button class="btn pri draw-btn" data-draw>抽一張 ✦</button>`}
     ${boosts ? `<label class="boost-opt"><input type="checkbox" id="use-boost"> 使用傳說機率提升券（持有 ${boosts}）</label>` : ""}
+    ${notifyHint()}
     <span class="fresh">每 12 小時抽一次・每抽 +10 點・${d.forced ? `下一抽必中${d.forced} ✨` : d.pityLabel ? `再 ${d.pityLeft} 抽內必中${d.pityLabel}` : ""}</span>
   </section>
 
@@ -997,6 +1005,33 @@ function sheet(html, bind) {
   document.body.appendChild(s); bind && bind(s); return s;
 }
 
+/* ===== 抽卡通知：iPhone 要先「加入主畫面」，從桌面圖示打開才能開推播 ===== */
+const PUSH_FLAG = "private_bank_push";
+const isStandalone = () => matchMedia("(display-mode: standalone)").matches || navigator.standalone === true;
+const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
+const pushOn = () => { try { return localStorage.getItem(PUSH_FLAG) === "1"; } catch (e) { return false; } };
+function notifyHint() {
+  if (!CONFIG.vapidPublicKey || !("serviceWorker" in navigator)) return "";
+  if (!("PushManager" in window) || !("Notification" in window))
+    return isIOS() && !isStandalone() ? `<span class="fresh">📲 用 Safari「分享 → 加入主畫面」，從桌面打開就能開抽卡通知</span>` : "";
+  if (Notification.permission === "denied") return `<span class="fresh">通知被關掉了：iPhone 設定 → 通知 → 嘟嘟銀行，打開就好</span>`;
+  if (Notification.permission === "granted" && pushOn()) return `<span class="fresh">🔔 抽卡通知已開啟</span>`;
+  return `<button class="btn ghost" data-push>🔔 開啟抽卡通知</button>`;
+}
+const b64u = s => { const p = "=".repeat((4 - s.length % 4) % 4), b = atob((s + p).replace(/-/g, "+").replace(/_/g, "/")); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+async function enablePush() {
+  try {
+    if (await Notification.requestPermission() !== "granted") { toast("沒有開啟通知權限"); return render(); }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64u(CONFIG.vapidPublicKey) });
+    await pointsCall({ action: "subscribe", sub: sub.toJSON(), device: isIOS() ? "iPhone" : (navigator.platform || "手機") });
+    try { localStorage.setItem(PUSH_FLAG, "1"); } catch (e) {}
+    toast("通知開好了，可以抽卡時會提醒妳 🔔");
+  } catch (e) { toast("通知開啟失敗，請稍後再試"); }
+  render();
+}
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
+
 /* ===== 開戶新手禮包：6 張卡依序翻開 ===== */
 async function doStarter() {
   if (drawing) return; drawing = true;
@@ -1276,7 +1311,7 @@ function intro() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-txn],[data-card],[data-draw],[data-starter],[data-buy],#logo,#logout,#house-edit,#q-vouch,#q-cs"); if (!t) return;
+  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],#logo,#logout,#house-edit,#q-vouch,#q-cs"); if (!t) return;
   if (t.dataset.range) { statRange = t.dataset.range; render(); return; }
   if (t.id === "house-edit") { editHouse(); return; }
   if (t.dataset.txn) { showImages(FUND.txns[Number(t.dataset.txn)]); return; }
@@ -1287,6 +1322,7 @@ document.addEventListener("click", e => {
   else if (t.dataset.card) cardSheet(t.dataset.card);
   else if (t.dataset.draw !== undefined) doDraw();
   else if (t.dataset.starter !== undefined) doStarter();
+  else if (t.dataset.push !== undefined) enablePush();
   else if (t.dataset.buy) buyItem(t.dataset.buy);
   else if (t.id === "logo") logoTap();
   else if (t.id === "q-vouch") { hist = "points"; go("history"); }

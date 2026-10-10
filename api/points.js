@@ -10,7 +10,9 @@ import { pbkdf2Sync, createHash, timingSafeEqual, randomInt } from 'node:crypto'
 const POINTS_DS = 'd7643339-684a-4255-ac0c-7e4a74ac1c95'; // 💝 寵愛點數
 const HAND_DS = '33cf3ef4-6c02-4a23-aead-e5dbbef56939';   // 🃏 手牌
 const PERKS_DS = '64325c42-b28e-4247-89c9-542c33350347';  // 🎁 權益清單
-const CONFIG_DS = '1feb12cc-2ff5-4581-b607-0787c03c530c'; // ⚙️ 抽卡設定（機率、保底）
+const CONFIG_DS = '1feb12cc-2ff5-4581-b607-0787c03c530c'; // ⚙️ 抽卡設定（一般機率、新手禮包機率）
+const LINES_DS = '142db67e-d0ef-4ee6-98ec-591302f1e93f';  // 💌 情話
+const SUBS_DS = 'b9a2dc0a-9b90-407a-ba4f-fc1ace495f5f';   // 🔔 通知訂閱
 const HOUSE_PAGE = '3f48718e-66c1-81a2-99d9-f5ba73555415'; // Notion「🏠 愛情小屋」的「我們的家」那一列
 const HOUSE_FIELDS = { price: '房子總價', down: '頭期款', years: '貸款年數', monthly: '每月還款', rate: '房貸利率' };
 const OPENING_BONUS = 0;      // 開戶時沒有點數，開新手禮包才送 STARTER_POINTS
@@ -22,7 +24,8 @@ const DRAW_COOLDOWN = 12 * 3600e3, DRAW_REWARD = 10, MAX_COPIES = 3;
 const STARTER_DRAWS = 6, STARTER_MIN_CARDS = 2, STARTER_POINTS = 1314;   // 開戶新手禮包：免費 6 抽，至少 2 張權益卡，送 1,314 點
 // 機率與保底以 Notion「⚙️ 抽卡設定」為準；讀不到時用這組預設
 const DEFAULT_ODDS = { miss: 50, 普通: 28, 稀有: 14, 傳說: 5, 指定: 3 };       // %
-let CFG = { odds: DEFAULT_ODDS };
+const DEFAULT_STARTER_ODDS = { miss: 80, 普通: 15, 稀有: 5, 傳說: 0, 指定: 0 };  // 新手禮包裡隨機那幾抽
+let CFG = { odds: DEFAULT_ODDS, starterOdds: DEFAULT_STARTER_ODDS, lines: null };
 const RARITY = { 普通: { pts: 20, days: 90 }, 稀有: { pts: 60, days: 90 }, 傳說: { pts: 200, days: 180 }, 指定: { pts: 300, days: 180 } };
 const SHOP = { boost: { title: '傳說機率提升券', price: 300, rarity: '道具' }, wild: { title: '指定卡', price: 1000, rarity: '指定' } };
 const BIRTHDAY = '04-08';      // 小嘟嘟生日
@@ -50,7 +53,8 @@ function wildBoost(now = Date.now()) {
   if (md.slice(0, 2) === BIRTHDAY.slice(0, 2)) c.push([1.5, '生日月']);
   return c.sort((a, b) => b[0] - a[0])[0] ?? [1, ''];
 }
-function oddsFor({ boost = false } = {}) {
+function oddsFor({ boost = false, starter = false } = {}) {
+  if (starter) return { ...CFG.starterOdds };   // 新手禮包不吃生日加成、提升券
   const B = CFG.odds, [m] = wildBoost();
   const wild = Math.min(B.指定 * m, 90), ssr = Math.min(B.傳說 * (boost ? 3 : 1), 90 - wild);
   const baseRest = B.miss + B.普通 + B.稀有, rest = Math.max(0, 100 - wild - ssr), k = baseRest ? rest / baseRest : 0;
@@ -61,12 +65,17 @@ async function loadConfig() {
     const rows = (await queryAll(CONFIG_DS)).map(({ properties: p }) => ({
       type: p['類型']?.select?.name, rarity: p['稀有度']?.select?.name, pct: p['機率']?.number, every: p['每幾抽']?.number,
     }));
-    const odds = { miss: 0, 普通: 0, 稀有: 0, 傳說: 0, 指定: 0 };
-    for (const r of rows.filter(r => r.type === '機率' && r.pct >= 0)) odds[r.rarity === '沒中' ? 'miss' : r.rarity] = r.pct;
-    const sum = Object.values(odds).reduce((a, b) => a + b, 0);
-    CFG = { odds: sum > 0 ? Object.fromEntries(Object.entries(odds).map(([k, v]) => [k, v * 100 / sum])) : DEFAULT_ODDS };
-  } catch { CFG = { odds: DEFAULT_ODDS }; }
+    const table = (type, fallback) => {
+      const o = { miss: 0, 普通: 0, 稀有: 0, 傳說: 0, 指定: 0 };
+      for (const r of rows.filter(r => r.type === type && r.pct >= 0)) o[r.rarity === '沒中' ? 'miss' : r.rarity] = r.pct;
+      const sum = Object.values(o).reduce((a, b) => a + b, 0);
+      return sum > 0 ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v * 100 / sum])) : fallback;
+    };
+    const lines = (await queryAll(LINES_DS)).filter(r => r.properties['上架']?.checkbox).map(r => txt(r.properties['情話'])).filter(Boolean);
+    CFG = { odds: table('機率', DEFAULT_ODDS), starterOdds: table('新手禮包', DEFAULT_STARTER_ODDS), lines: lines.length ? lines : null };
+  } catch { CFG = { odds: DEFAULT_ODDS, starterOdds: DEFAULT_STARTER_ODDS, lines: null }; }
 }
+const loveLine = () => { const l = CFG.lines || LOVE_LINES; return l[randomInt(l.length)]; };
 function roll(odds) {
   let r = randomInt(0, 1_000_000) / 10_000;
   for (const [k, p] of Object.entries(odds)) { if ((r -= p) < 0) return k; }
@@ -244,7 +253,7 @@ export default async function handler(req, res) {
           if (!room.length) overflow = RARITY[kind].pts;   // 這個稀有度都疊滿 3 張了：直接換成分解點數
         }
       }
-      const line = kind === 'miss' ? LOVE_LINES[randomInt(LOVE_LINES.length)] : '';
+      const line = kind === 'miss' ? loveLine() : '';
       const label = kind === 'miss' ? '抽卡・沒中' : kind === '指定' ? '抽卡・指定卡' : `抽卡・${perk.title}${overflow ? '（已滿自動分解）' : ''}`;
       await addRow({ type: '抽卡', title: label, amount: DRAW_REWARD + overflow, perkId: perk?.id ?? '', note: kind === 'miss' ? '沒中' : kind });
       let newCard = null;
@@ -270,10 +279,11 @@ export default async function handler(req, res) {
       }
       for (let i = results.length; i < STARTER_DRAWS; i++) {
         const left = STARTER_DRAWS - i, need = STARTER_MIN_CARDS - cards;
-        let kind = roll(oddsFor());
+        let kind = roll(oddsFor({ starter: true }));
         if (kind === 'miss' && need >= left) {   // 剩下的抽數剛好等於還差的卡數：這抽一定要是卡
-          const o = oddsFor(); delete o.miss;
-          kind = roll(Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v * 100 / Object.values(o).reduce((a, b) => a + b, 0)])));
+          const o = oddsFor({ starter: true }); delete o.miss;
+          const s = Object.values(o).reduce((a, b) => a + b, 0);
+          kind = s > 0 ? roll(Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v * 100 / s]))) : '普通';
         }
         let perk = null;
         if (kind !== 'miss' && kind !== '指定') {
@@ -286,11 +296,21 @@ export default async function handler(req, res) {
         else if (perk) { cardId = (await addCard({ title: perk.title, perkId: perk.id, rarity: kind })).id; hand.push({ perkId: perk.id, status: '手牌' }); }
         if (kind !== 'miss') cards++;
         results.push({ kind, rarity: kind === 'miss' ? null : kind, perkId: perk?.id ?? null, title: perk?.title ?? (kind === '指定' ? '指定卡' : ''),
-          line: kind === 'miss' ? LOVE_LINES[randomInt(LOVE_LINES.length)] : '', cardId });
+          line: kind === 'miss' ? loveLine() : '', cardId });
       }
       await addRow({ type: '新手禮包', title: `開戶新手禮包・${STARTER_DRAWS} 抽＋開戶禮`, amount: STARTER_POINTS, note: `${cards} 張卡` });
       for (let i = results.length - 1; i > 0; i--) { const j = randomInt(i + 1); [results[i], results[j]] = [results[j], results[i]]; }   // 打亂順序，必中的卡不會固定在前面
       return res.status(200).json({ results, points: STARTER_POINTS });
+    }
+    // ===== 手機推播訂閱（iPhone 主畫面 App 開通知時呼叫）=====
+    if (body.action === 'subscribe') {
+      const sub = body.sub;
+      if (!sub?.endpoint || !sub?.keys?.p256dh || !sub?.keys?.auth) return fail(400, 'bad_request');
+      const json = JSON.stringify({ endpoint: sub.endpoint, keys: sub.keys });
+      const existing = (await queryAll(SUBS_DS)).find(r => txt(r.properties['訂閱']).includes(sub.endpoint));
+      if (!existing) await notion('pages', 'POST', { parent: { type: 'data_source_id', data_source_id: SUBS_DS },
+        properties: { '裝置': title(String(body.device || '手機').slice(0, 60)), '訂閱': { rich_text: [{ text: { content: json.slice(0, 2000) } }] } } });
+      return res.status(200).json({ ok: true, existed: !!existing });
     }
     // ===== 發動手牌 =====
     if (body.action === 'play') {

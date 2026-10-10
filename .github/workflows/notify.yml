@@ -1,0 +1,21 @@
+name: 抽卡通知
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # 每 15 分鐘檢查一次（GitHub 排程可能延遲幾分鐘）
+  workflow_dispatch:
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-save --no-package-lock web-push@3.6.7
+      - run: node sync/notify.mjs
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
