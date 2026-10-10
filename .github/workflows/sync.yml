@@ -16,8 +16,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: 安裝圖片壓縮工具
-        run: npm install --no-save --no-package-lock sharp@0.33.5
+      - name: 安裝圖片壓縮與 HEIC 轉檔工具
+        run: npm install --no-save --no-package-lock sharp@0.33.5 heic-convert@2.1.0
       - run: node sync/sync.mjs
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}

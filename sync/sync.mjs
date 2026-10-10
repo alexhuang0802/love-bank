@@ -138,9 +138,15 @@ if (prevEnc) {
   } catch {} // 密碼換了 → 解不開 → 全部重新加密
 }
 
-let sharp = null;
+let sharp = null, heicConvert = null;
 try { sharp = (await import("sharp")).default; } catch {}
+try { heicConvert = (await import("heic-convert")).default; } catch {}
+// iPhone 的 HEIC/HEIF 瀏覽器看不懂（sharp 預設也讀不了），先轉成 JPEG
+const isHeic = buf => /^ftyp(heic|heix|hevc|hevx|mif1|msf1)/.test(buf.subarray(4, 12).toString("latin1"));
 async function shrink(buf) {
+  if (isHeic(buf) && heicConvert) {
+    try { buf = Buffer.from(await heicConvert({ buffer: buf, format: "JPEG", quality: 0.85 })); } catch {}
+  }
   if (!sharp) return buf;
   try { return await sharp(buf).rotate().resize({ width: 1600, height: 1600, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 78 }).toBuffer(); }
   catch { return buf; }
@@ -153,7 +159,7 @@ let imgCount = 0;
 async function encryptImages(pageId) {
   const files = [];
   for (const b of await pageImages(pageId)) {
-    const k = `${b.id}@${b.edited}`;
+    const k = `${b.id}@${b.edited}@v2`; // v2：加入 HEIC 轉檔，舊的圖片全部重新處理一次
     let name = prevImages[k];
     if (!name) {
       const res = await fetch(b.url);
