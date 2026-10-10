@@ -58,6 +58,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .card::after { content: ""; position: absolute; inset: -40%; pointer-events: none;
   background: linear-gradient(115deg, transparent 40%, rgba(255,240,210,.13) 50%, transparent 60%);
   transform: translateX(var(--shine, -30%)); transition: transform .25s ease-out; }
+.card-bg { position: absolute; inset: 0; z-index: 0; }
+.card-bg img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.card-bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.45) 0%, rgba(0,0,0,.05) 40%, rgba(0,0,0,.6) 100%); }
+.card.has-bg .card-tier, .card.has-bg .card-holder { color: rgba(255,255,255,.85); text-shadow: 0 1px 3px rgba(0,0,0,.6); }
+.card.has-bg .card-j, .card.has-bg .card-no { text-shadow: 0 1px 4px rgba(0,0,0,.7); }
 .card-row { display: flex; justify-content: space-between; align-items: flex-start; position: relative; z-index: 1; }
 .card-tier { font-size: 10px; letter-spacing: .3em; color: var(--muted); text-transform: uppercase; }
 .card-j { font-family: var(--f-display); font-size: 40px; line-height: 1; color: var(--gold); }
@@ -410,7 +415,8 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">"
 const code = () => Array.from({ length: 6 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random()*32)]).join("");
 
 const cardHTML = () => `
-  <div class="card" id="card">
+  <div class="card${FUND?.cardImg ? " has-bg" : ""}" id="card">
+    ${FUND?.cardImg ? `<div class="card-bg" data-img="${esc(FUND.cardImg)}"></div>` : ""}
     <div class="card-row"><span class="card-tier">Infinite · Private</span><span class="card-j">${esc(CONFIG.mono)}</span></div>
     <div class="card-row" style="align-items:center"><span class="chip"></span>
       <svg class="nfc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 6c2 3.5 2 8.5 0 12"/><path d="M12 4c3 4.5 3 11.5 0 16"/><path d="M16 2c4 5.5 4 14.5 0 20"/></svg></div>
@@ -472,8 +478,8 @@ function renderHome() {
   <header class="top"><button class="brand" id="logo" aria-label="${esc(CONFIG.bankName)}"><span class="mono">${esc(CONFIG.mono)}</span><span class="brand-name">${esc(CONFIG.bankName)}</span></button>
     <button class="bell" id="logout" aria-label="登出網銀">登出</button></header>
   <div class="hello"><h1>HI ${esc(CONFIG.customer)}~</h1></div>
-  ${loveDays()}
   <div class="card-wrap">${cardHTML()}</div>
+  ${loveDays()}
   <div class="accts">
     <div class="acct">${fundSummary()}</div>
     <div class="acct">

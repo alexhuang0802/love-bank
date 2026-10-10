@@ -14,6 +14,7 @@ const TEMPLATE_ROWS = new Set(["Acme Inc. Salary", "Emca Inc. Salary", "Divident
 const OUT = new URL("../data.enc.json", import.meta.url);
 const IMG_DIR = new URL("../img/", import.meta.url);
 const MAX_IMGS_PER_TXN = 6;
+const CARD_PAGE = "3f58718e-66c1-8156-9f94-eef280927351";  // Notion「💳 卡片背景」：第一張是首頁信用卡的背景
 const PHOTO_PAGE = "3f38718e-66c1-813c-8485-fbe4bded33c3"; // Notion「📷 網銀照片」：第一張是開卡畫面的合照
 
 const { NOTION_TOKEN, BANK_PASSWORD } = process.env;
@@ -180,6 +181,7 @@ for (const t of recent) {
   if (files.length) t.imgs = files;
 }
 const photos = await encryptImages(PHOTO_PAGE);
+const cardImg = (await encryptImages(CARD_PAGE))[0] ?? null;
 
 // 權益清單：上架的才放進網銀，每個權益頁面裡的第一張圖是卡牌插圖
 const perks = [];
@@ -205,7 +207,7 @@ const txns = recent.map(({ id, ...t }) => t);
 const data = {
   updatedAt: new Date().toISOString(), fundName: "❤️❤️基金",
   cash, month, stocks, stockValue, total: cash.balance + stockValue, txns,
-  stats: { byMonth }, imageIndex, photos, perks, mortgage, anniversaries,
+  stats: { byMonth }, imageIndex, photos, cardImg, perks, mortgage, anniversaries,
 };
 
 const { iv, ct } = await encrypt(new TextEncoder().encode(JSON.stringify(data)));
