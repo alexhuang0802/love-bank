@@ -1480,7 +1480,7 @@ function endTour(toDraw) {
 
 /* 開卡儀式 */
 /* 每次打開網銀（開過卡之後）：先跳出合照拍立得，點一下進入 */
-function welcomeBack() {
+function welcomeBack(onEnter) {
   const photos = [...FUND.photos];   // 每次打開都洗牌，照片順序隨機
   for (let i = photos.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [photos[i], photos[j]] = [photos[j], photos[i]]; }
   const el = document.createElement("div"); el.className = "intro welcome";
@@ -1491,7 +1491,7 @@ function welcomeBack() {
     <button class="btn pri" id="enter-bank" style="min-width:200px">進入網銀</button>`;
   document.body.appendChild(el);
   // 只有按鈕或點照片外的空白處才進入，避免左右滑照片時誤觸
-  el.addEventListener("click", e => { if (e.target === el || e.target.closest("#enter-bank")) el.remove(); });
+  el.addEventListener("click", e => { if (e.target === el || e.target.closest("#enter-bank")) { el.remove(); onEnter?.(); } });
   const strip = $(".pola-strip", el), dots = el.querySelectorAll(".dots i");
   let cur = 0;
   strip.addEventListener("scroll", () => {
@@ -1523,16 +1523,13 @@ function welcomeBack() {
 }
 function intro() {
   const el = document.createElement("div"); el.className = "intro";
-  const photo = FUND?.photos?.[0];
-  el.innerHTML = `<div class="intro-stage">${cardHTML()}${photo ? `<figure class="polaroid"><span class="fresh">…</span></figure>` : ""}</div>
+  el.innerHTML = `<div class="intro-stage" style="padding-bottom:0">${cardHTML()}</div>
     <h2>歡迎${esc(CONFIG.customer)}</h2>
     <p>${esc(CONFIG.bankName)} 今天正式開業。</p>
     <button class="btn pri" id="activate" style="min-width:200px">啟用我的卡片</button>`;
   document.body.appendChild(el);
-  // 合照放在卡片右下角，像拍立得夾在卡片上；圖片跟交易圖片一樣是加密的
-  if (photo) loadImage(photo).then(u => { $(".polaroid", el).innerHTML = `<img src="${u}" alt="我們的合照">`; })
-    .catch(() => $(".polaroid", el)?.remove());
-  $("#activate", el).onclick = () => { state.opened = true; save(); el.remove(); startTour(); };
+  // 開卡後先看合照輪播，按「進入網銀」才開始新手指引
+  $("#activate", el).onclick = () => { state.opened = true; save(); el.remove(); FUND?.photos?.length ? welcomeBack(startTour) : startTour(); };
 }
 
 document.addEventListener("click", e => {
