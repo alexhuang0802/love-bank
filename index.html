@@ -63,6 +63,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .card-bg::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.45) 0%, rgba(0,0,0,.05) 40%, rgba(0,0,0,.6) 100%); }
 .card.has-bg .card-tier, .card.has-bg .card-holder { color: rgba(255,255,255,.85); text-shadow: 0 1px 3px rgba(0,0,0,.6); }
 .card.has-bg .card-j, .card.has-bg .card-no { text-shadow: 0 1px 4px rgba(0,0,0,.7); }
+.bg-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-height: 60vh; overflow-y: auto; }
+.bg-opt { aspect-ratio: 1.586; border-radius: 10px; overflow: hidden; border: 2px solid transparent; background: var(--ink); padding: 0; }
+.bg-opt.on { border-color: var(--gold); }
+.bg-opt img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .card-row { display: flex; justify-content: space-between; align-items: flex-start; position: relative; z-index: 1; }
 .card-tier { font-size: 10px; letter-spacing: .3em; color: var(--muted); text-transform: uppercase; }
 .card-j { font-family: var(--f-display); font-size: 40px; line-height: 1; color: var(--gold); }
@@ -420,9 +424,32 @@ const dt = iso => { const d = new Date(iso); return `${d.getFullYear()}/${pad(d.
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[c]));
 const code = () => Array.from({ length: 6 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random()*32)]).join("");
 
+// 首頁卡片背景：Notion「💳 卡片背景」可以放好幾張，點卡片挑一張，選擇存在雲端（換手機、加到主畫面都會記得）
+const CARDBG_KEY = "private_bank_cardbg";
+function cardBgImg() {
+  const list = FUND?.cardImgs;
+  if (!list?.length) return FUND?.cardImg || null;
+  let id = GAME?.cardBg; if (!id) try { id = localStorage.getItem(CARDBG_KEY); } catch (e) {}
+  return (list.find(x => x.id === id) || list[0]).img;
+}
+function pickCardBg() {
+  const list = FUND?.cardImgs || []; if (list.length < 2) return;
+  const cur = cardBgImg();
+  sheet(`<h3>換卡片背景</h3><div class="bg-grid">${list.map(x => `<button class="bg-opt${x.img === cur ? " on" : ""}" data-bg="${esc(x.id)}" data-img="${esc(x.img)}"></button>`).join("")}</div>
+    <button class="btn ghost" data-close>關閉</button>`, s => {
+    hydrateImages();
+    s.querySelectorAll("[data-bg]").forEach(b => b.onclick = async () => {
+      const id = b.dataset.bg;
+      try { localStorage.setItem(CARDBG_KEY, id); } catch (e) {}
+      if (GAME) GAME.cardBg = id;
+      s.remove(); render(); toast("卡片背景換好了");
+      try { await pointsCall({ action: "card_bg", id }); } catch (e) { toast("背景只存在這支手機，雲端暫時連不上"); }
+    });
+  });
+}
 const cardHTML = () => `
-  <div class="card${FUND?.cardImg ? " has-bg" : ""}" id="card">
-    ${FUND?.cardImg ? `<div class="card-bg" data-img="${esc(FUND.cardImg)}"></div>` : ""}
+  <div class="card${cardBgImg() ? " has-bg" : ""}" id="card">
+    ${cardBgImg() ? `<div class="card-bg" data-img="${esc(cardBgImg())}"></div>` : ""}
     <div class="card-row"><span class="card-tier">Infinite · Private</span><span class="card-j">${esc(CONFIG.mono)}</span></div>
     <div class="card-row" style="align-items:center"><span class="chip"></span>
       <svg class="nfc" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M8 6c2 3.5 2 8.5 0 12"/><path d="M12 4c3 4.5 3 11.5 0 16"/><path d="M16 2c4 5.5 4 14.5 0 20"/></svg></div>
@@ -616,6 +643,7 @@ async function pointsCall(body) {
 function applyCloud(j) {
   const t0 = state.txns.find(t => t.id === "t0");
   GAME = j;
+  if (j.cardBg) try { localStorage.setItem(CARDBG_KEY, j.cardBg); } catch (e) {}
   state.balance = j.balance;
   state.txns = [
     ...j.rows.filter(r => r.type !== "兌換").map(r => ({ id: r.id, at: r.at, title: r.title, note: r.type === "抽卡" ? "" : r.note, amount: r.amount })),
@@ -1399,7 +1427,8 @@ function intro() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],#logo,#logout,#house-edit"); if (!t) return;
+  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],#logo,#logout,#house-edit,#card"); if (!t) return;
+  if (t.id === "card") { if (!t.closest(".intro")) pickCardBg(); return; }
   if (t.dataset.range) { statRange = t.dataset.range; render(); return; }
   if (t.id === "house-edit") { editHouse(); return; }
   if (t.dataset.txn) { showImages(FUND.txns[Number(t.dataset.txn)]); return; }

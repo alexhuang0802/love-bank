@@ -64,8 +64,8 @@ function oddsFor({ boost = false, starter = false } = {}) {
 }
 async function loadConfig() {
   try {
-    const rows = (await queryAll(CONFIG_DS)).map(({ properties: p }) => ({
-      type: p['類型']?.select?.name, rarity: p['稀有度']?.select?.name, pct: p['機率']?.number, every: p['每幾抽']?.number,
+    const rows = (await queryAll(CONFIG_DS)).map(({ id, properties: p }) => ({
+      id, value: txt(p['值']), type: p['類型']?.select?.name, rarity: p['稀有度']?.select?.name, pct: p['機率']?.number, every: p['每幾抽']?.number,
     }));
     const table = (type, fallback) => {
       const o = { miss: 0, 普通: 0, 稀有: 0, 傳說: 0, 指定: 0 };
@@ -76,7 +76,7 @@ async function loadConfig() {
     const lines = (await queryAll(LINES_DS)).filter(r => r.properties['上架']?.checkbox).map(r => txt(r.properties['情話'])).filter(Boolean);
     const blank = rows.find(r => r.type === '空白卡' && r.every >= 1)?.every;
     CFG = { odds: table('機率', DEFAULT_ODDS), starterOdds: table('新手禮包', DEFAULT_STARTER_ODDS), lines: lines.length ? lines : null,
-      blankEvery: blank ? Math.round(blank) : DEFAULT_BLANK_EVERY };
+      blankEvery: blank ? Math.round(blank) : DEFAULT_BLANK_EVERY, cardBgRow: rows.find(r => r.type === '卡片背景') ?? null };
   } catch { CFG = { odds: DEFAULT_ODDS, starterOdds: DEFAULT_STARTER_ODDS, lines: null, blankEvery: DEFAULT_BLANK_EVERY }; }
 }
 const loveLine = () => { const l = CFG.lines || LOVE_LINES; return l[randomInt(l.length)]; };
@@ -357,6 +357,16 @@ export default async function handler(req, res) {
       await addCard({ title: item.title, perkId: body.item === 'boost' ? 'boost' : 'wild', rarity: item.rarity });
       return res.status(200).json({ ok: true });
     }
+    // ===== 首頁卡片背景：選中的照片存在 Notion「⚙️ 抽卡設定」類型＝卡片背景 那一列 =====
+    if (body.action === 'card_bg') {
+      const id = String(body.id ?? '').slice(0, 64);
+      if (!/^[0-9a-f-]{32,36}$/.test(id)) return fail(400, 'bad_request');
+      const row = CFG.cardBgRow;
+      if (row) await notion(`pages/${row.id}`, 'PATCH', { properties: { '值': rt(id) } });
+      else await notion('pages', 'POST', { parent: { type: 'data_source_id', data_source_id: CONFIG_DS },
+        properties: { '名稱': title('首頁卡片背景（網銀自動寫入）'), '類型': sel('卡片背景'), '值': rt(id) } });
+      return res.status(200).json({ ok: true });
+    }
     // ===== 行員：撥入點數、核銷（要 ADMIN_PIN）=====
     if (['admin_check', 'grant', 'use'].includes(body.action)) {
       if (!process.env.ADMIN_PIN) return fail(503, 'admin_not_set');
@@ -389,7 +399,7 @@ export default async function handler(req, res) {
       opening: OPENING_BONUS, balance: balanceOf(rows), rows, starterClaimed: rows.some(r => r.type === '新手禮包'),
       hand: hand.filter(c => ['手牌', '已發動', '已核銷'].includes(c.status)),
       perks, draw: (st => ({ ...st, forced: st.forced?.title ?? null, odds: oddsFor() }))(drawState(rows, perks)), shop: SHOP, dismantlePts: Object.fromEntries(Object.entries(RARITY).map(([k, v]) => [k, v.pts])),
-      expiredNow: expired.map(c => c.title),
+      expiredNow: expired.map(c => c.title), cardBg: CFG.cardBgRow?.value || null,
     });
   } catch (e) {
     return fail(502, 'upstream');

@@ -158,7 +158,7 @@ async function shrink(buf) {
 await mkdir(IMG_DIR, { recursive: true });
 const imageIndex = {};   // `${blockId}@${edited}` → 檔名（存在加密資料裡，公開 repo 看不出對應哪筆）
 let imgCount = 0;
-async function encryptImages(pageId) {
+async function encryptImages(pageId, withId = false) {
   const files = [];
   for (const b of await pageImages(pageId)) {
     const k = `${b.id}@${b.edited}@v2`; // v2：加入 HEIC 轉檔，舊的圖片全部重新處理一次
@@ -171,7 +171,7 @@ async function encryptImages(pageId) {
       await writeFile(new URL(name, IMG_DIR), Buffer.concat([Buffer.from(iv), Buffer.from(ct)]));
     }
     imageIndex[k] = name;
-    files.push(`img/${name}`);
+    files.push(withId ? { id: b.id, img: `img/${name}` } : `img/${name}`);
     imgCount++;
   }
   return files;
@@ -181,7 +181,8 @@ for (const t of recent) {
   if (files.length) t.imgs = files;
 }
 const photos = await encryptImages(PHOTO_PAGE);
-const cardImg = (await encryptImages(CARD_PAGE))[0] ?? null;
+const cardImgs = await encryptImages(CARD_PAGE, true);   // 卡片背景可以放好幾張，網銀裡點卡片挑
+const cardImg = cardImgs[0]?.img ?? null;
 
 // 權益清單：上架的才放進網銀，每個權益頁面裡的第一張圖是卡牌插圖
 const perks = [];
@@ -207,7 +208,7 @@ const txns = recent.map(({ id, ...t }) => t);
 const data = {
   updatedAt: new Date().toISOString(), fundName: "❤️❤️基金",
   cash, month, stocks, stockValue, total: cash.balance + stockValue, txns,
-  stats: { byMonth }, imageIndex, photos, cardImg, perks, mortgage, anniversaries,
+  stats: { byMonth }, imageIndex, photos, cardImg, cardImgs, perks, mortgage, anniversaries,
 };
 
 const { iv, ct } = await encrypt(new TextEncoder().encode(JSON.stringify(data)));
