@@ -71,6 +71,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .bg-opt { aspect-ratio: 1.586; border-radius: 10px; overflow: hidden; border: 2px solid transparent; background: var(--ink); padding: 0; }
 .bg-opt.on { border-color: var(--gold); }
 .bg-opt img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.chart-card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; gap: 10px; }
+.seg.seg4 { grid-template-columns: repeat(4, 1fr); }
+.chart { width: 100%; height: auto; display: block; overflow: visible; }
+.chart path { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart text { fill: var(--muted); font-size: 9px; font-family: var(--f-mono); }
+.chart .grid { stroke: var(--line); stroke-width: 1; } .chart .zero { stroke: var(--muted); stroke-dasharray: 3 3; }
+.chart .pick { stroke: rgba(201,177,126,.4); stroke-width: 1; }
+.chart-read { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; font-size: 13px; color: var(--muted); }
+.chart-read b { color: var(--text); font-weight: 500; margin-right: 2px; }
+.chart-read span { display: inline-flex; align-items: center; gap: 5px; font-variant-numeric: tabular-nums; }
+.chart-read i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .inc-sum { margin-bottom: 6px; }
 .inc-sum .bar { margin-top: 6px; }
 .inc-tags { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; }
@@ -1006,6 +1017,63 @@ function vsAverage(bm) {
     ${incomeGroups(curTags("income"), tagAverages(bm, past, "income", incOf))}</section>`;
 }
 
+/* ===== 收支分析最上面的折線圖：收支、收入來源、支出前三類、存錢率（近 12 個月）===== */
+let chartTab = "flow", chartPick = null;
+const CHART_TABS = { flow: "收支", src: "收入來源", top: "支出前三", rate: "存錢率" };
+const short = n => Math.abs(n) >= 1e4 ? `${+(n / 1e4).toFixed(Math.abs(n) >= 1e5 ? 0 : 1)}萬` : fmt(Math.round(n));
+function chartSeries(bm, keys) {
+  const incTag = (k, t) => (bm[k]?.income?.[t] ?? 0) - (bm[k]?.openingByTag?.[t] ?? 0);
+  const inc = k => sumObj(bm[k]?.income) - (bm[k]?.opening ?? 0);
+  const exp = k => sumObj(bm[k]?.expense) - (bm[k]?.expense?.[SKIP_EXPENSE_TAG] ?? 0);
+  if (chartTab === "flow") return [
+    { name: "收入", color: "var(--plus)", v: keys.map(inc) },
+    { name: "支出", color: "var(--minus)", v: keys.map(exp) },
+    { name: "結餘", color: "var(--gold)", v: keys.map(k => inc(k) - exp(k)) },
+  ];
+  if (chartTab === "src") {
+    const known = new Set(INCOME_GROUPS.flatMap(g => g.tags));
+    const tagsOf = k => Object.keys(bm[k]?.income ?? {});
+    return [
+      ...INCOME_GROUPS.map((g, i) => ({ name: g.name, color: ["var(--plus)", "var(--gold)"][i], v: keys.map(k => g.tags.reduce((s, t) => s + incTag(k, t), 0)) })),
+      { name: "業外收入", color: "#7fa8d6", v: keys.map(k => tagsOf(k).filter(t => !known.has(t)).reduce((s, t) => s + incTag(k, t), 0)) },
+    ];
+  }
+  if (chartTab === "top") {
+    const tot = {};
+    for (const k of keys) for (const [t, v] of Object.entries(bm[k]?.expense ?? {})) if (t !== SKIP_EXPENSE_TAG) tot[t] = (tot[t] ?? 0) + v;
+    return Object.entries(tot).sort((a, b) => b[1] - a[1]).slice(0, 3)
+      .map(([t], i) => ({ name: t, color: ["var(--minus)", "var(--gold)", "#a77bd6"][i], v: keys.map(k => bm[k]?.expense?.[t] ?? 0) }));
+  }
+  return [{ name: "存錢率", color: "var(--gold)", pct: true, v: keys.map(k => inc(k) > 0 ? Math.round((inc(k) - exp(k)) / inc(k) * 100) : null) }];
+}
+function lineChart(bm, curKey) {
+  const first = Object.keys(bm).sort()[0];
+  const keys = monthKeys(curKey, 12).filter(k => k >= first);
+  if (keys.length < 2) return "";
+  const series = chartSeries(bm, keys), pct = series[0]?.pct;
+  const W = 340, H = 180, L = 40, R = 8, T = 10, B = 24, n = keys.length;
+  const all = series.flatMap(s => s.v).filter(v => v != null);
+  let lo = Math.min(0, ...all), hi = Math.max(1, ...all);
+  if (pct) { lo = Math.min(0, lo); hi = Math.max(100, hi); }
+  const x = i => L + (W - L - R) * i / (n - 1), y = v => T + (H - T - B) * (1 - (v - lo) / (hi - lo || 1));
+  const ticks = [lo, lo + (hi - lo) / 2, hi].map(v => Math.round(v));
+  const pick = chartPick != null && chartPick < n ? chartPick : n - 1;
+  const path = s => s.v.map((v, i) => v == null ? "" : `${i && s.v[i - 1] != null ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join("");
+  const svg = `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(CHART_TABS[chartTab])}折線圖">
+    ${ticks.map(t => `<line x1="${L}" x2="${W - R}" y1="${y(t)}" y2="${y(t)}" class="grid"/><text x="${L - 6}" y="${y(t) + 3}" text-anchor="end">${pct ? t + "%" : short(t)}</text>`).join("")}
+    ${lo < 0 ? `<line x1="${L}" x2="${W - R}" y1="${y(0)}" y2="${y(0)}" class="zero"/>` : ""}
+    <line x1="${x(pick)}" x2="${x(pick)}" y1="${T}" y2="${H - B}" class="pick"/>
+    ${series.map(s => `<path d="${path(s)}" stroke="${s.color}"/>${s.v.map((v, i) => v == null ? "" : `<circle cx="${x(i)}" cy="${y(v)}" r="${i === pick ? 4 : 2.5}" fill="${s.color}"/>`).join("")}`).join("")}
+    ${keys.map((k, i) => (n <= 6 || i % 2 === (n - 1) % 2) ? `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${Number(k.slice(5))}月</text>` : "").join("")}
+    ${keys.map((_, i) => `<rect x="${x(i) - (W - L - R) / (n - 1) / 2}" y="0" width="${(W - L - R) / (n - 1)}" height="${H}" fill="transparent" data-pick="${i}"/>`).join("")}
+  </svg>`;
+  return `<section class="sec chart-card">
+    <div class="seg seg4" role="group" aria-label="圖表">${Object.entries(CHART_TABS).map(([k, l]) => `<button data-chart="${k}" aria-pressed="${chartTab === k}">${l}</button>`).join("")}</div>
+    <div class="chart-read"><b>${day(keys[pick])}</b>${series.map(s => `<span><i style="background:${s.color}"></i>${esc(s.name)} ${s.v[pick] == null ? "—" : s.pct ? s.v[pick] + "%" : fmt(Math.round(s.v[pick]))}</span>`).join("")}</div>
+    ${svg}
+  </section>`;
+}
+
 function renderStats() {
   const seg = `<div class="seg seg3" role="group" aria-label="期間">${Object.entries(RANGES).map(([k, l]) =>
     `<button data-range="${k}" aria-pressed="${statRange === k}">${l}</button>`).join("")}</div>`;
@@ -1023,7 +1091,8 @@ function renderStats() {
   const tv = tk.map(k => ({ k, i: Object.values(bm[k]?.income ?? {}).reduce((a, b) => a + b, 0), o: Object.values(bm[k]?.expense ?? {}).reduce((a, b) => a + b, 0) }));
   const tmax = Math.max(1, ...tv.flatMap(x => [x.i, x.o]));
 
-  return `${head}${vsAverage(bm)}
+  const tw = new Date(Date.now() + 8 * 3600e3), curKey = `${tw.getUTCFullYear()}-${String(tw.getUTCMonth() + 1).padStart(2, "0")}`;
+  return `${head}${lineChart(bm, curKey)}${vsAverage(bm)}
   <section class="sec"><div class="sec-head"><h2>期間統計</h2></div>${seg}</section>
   <span class="fresh">${esc(label)}</span>
   <div class="sum3">
@@ -1412,7 +1481,8 @@ function endTour(toDraw) {
 /* 開卡儀式 */
 /* 每次打開網銀（開過卡之後）：先跳出合照拍立得，點一下進入 */
 function welcomeBack() {
-  const photos = FUND.photos;
+  const photos = [...FUND.photos];   // 每次打開都洗牌，照片順序隨機
+  for (let i = photos.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [photos[i], photos[j]] = [photos[j], photos[i]]; }
   const el = document.createElement("div"); el.className = "intro welcome";
   el.innerHTML = `<div class="pola-strip">${photos.map((_, i) =>
       `<figure class="polaroid big" data-i="${i}"><span class="fresh">…</span></figure>`).join("")}</div>
@@ -1466,9 +1536,11 @@ function intro() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],#logo,#logout,#house-edit,#card"); if (!t) return;
+  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-chart],[data-pick],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],#logo,#logout,#house-edit,#card"); if (!t) return;
   if (t.id === "card") { if (!t.closest(".intro")) pickCardBg(); return; }
   if (t.dataset.range) { statRange = t.dataset.range; render(); return; }
+  if (t.dataset.chart) { chartTab = t.dataset.chart; chartPick = null; render(); return; }
+  if (t.dataset.pick) { chartPick = Number(t.dataset.pick); render(); return; }
   if (t.id === "house-edit") { editHouse(); return; }
   if (t.dataset.txn) { showImages(FUND.txns[Number(t.dataset.txn)]); return; }
   if (t.id === "logout") { try { localStorage.removeItem(KEY_STORE); } catch (_) {} location.reload(); return; }
