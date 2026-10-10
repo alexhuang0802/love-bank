@@ -99,7 +99,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .month .amt { font-size: 17px; }
 
 /* Quick actions */
-.quick { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .quick button { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); padding-block: 4px; }
 .quick .ico { width: 46px; height: 46px; border-radius: 50%; border: 1px solid var(--line); display: grid; place-items: center; color: var(--gold); font-size: 18px; background: var(--panel); }
 
@@ -364,7 +364,6 @@ const CONFIG = {
   cardNo: "5208 •••• •••• 1314",
   since: "2026/10/05",              // 開戶日
   openingBonus: 0,                  // 開戶時沒有點數，開新手禮包才送 1,314 點（見 api/points.js）
-  limitText: "無上限",
   vapidPublicKey: "",               // 推播公鑰（npx web-push generate-vapid-keys 的 Public Key），空白 = 不顯示通知按鈕
   pointsApi: "https://love-bank-murex.vercel.app/api/points",                  // 雲端點數 API（Vercel 部署好後填 https://xxx.vercel.app/api/points），空白 = 只存在這支手機
   perks: [
@@ -483,15 +482,14 @@ function renderHome() {
   <div class="accts">
     <div class="acct">${fundSummary()}</div>
     <div class="acct">
-      <div class="acct-top"><span class="label">寵愛點數</span><span class="fresh">額度 ${esc(CONFIG.limitText)}</span></div>
+      <div class="acct-top"><span class="label">寵愛點數</span></div>
       <span class="big">${fmt(state.balance)}<small>pts</small></span>
     </div>
   </div>
   <div class="quick">
     <button data-go="perks"><span class="ico">✦</span>抽卡</button>
     <button data-go="history"><span class="ico">≡</span>交易紀錄</button>
-    <button id="q-vouch"><span class="ico">◇</span>我的憑證</button>
-    <button id="q-cs"><span class="ico">☏</span>專屬理專</button>
+    <button data-go="house"><span class="ico">⌂</span>愛情小屋</button>
   </div>
   <section class="sec"><div class="sec-head"><h2>可使用的憑證</h2>${unused.length ? `<span class="label">${unused.length} 張</span>` : ""}</div>
     <div class="list">${unused.length ? unused.slice(0, 3).map(voucherRow).join("") : `<div class="empty">手牌裡的卡發動後，憑證會出現在這裡。</div>`}</div></section>
@@ -1345,7 +1343,7 @@ function intro() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],#logo,#logout,#house-edit,#q-vouch,#q-cs"); if (!t) return;
+  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],#logo,#logout,#house-edit"); if (!t) return;
   if (t.dataset.range) { statRange = t.dataset.range; render(); return; }
   if (t.id === "house-edit") { editHouse(); return; }
   if (t.dataset.txn) { showImages(FUND.txns[Number(t.dataset.txn)]); return; }
@@ -1359,10 +1357,6 @@ document.addEventListener("click", e => {
   else if (t.dataset.push !== undefined) enablePush();
   else if (t.dataset.buy) buyItem(t.dataset.buy);
   else if (t.id === "logo") logoTap();
-  else if (t.id === "q-vouch") { hist = "points"; go("history"); }
-  else if (t.id === "q-cs") sheet(`<h3>專屬理專</h3><p>本行理專 24 小時待命，回覆速度視理專是否在打電動而定。</p>
-    <div class="kv"><span>服務時間</span><span>全年無休</span></div><div class="kv"><span>服務態度</span><span>永遠五星</span></div>
-    <button class="btn pri" data-close>好的</button>`);
 });
 
 render();
