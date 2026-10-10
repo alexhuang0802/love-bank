@@ -67,6 +67,10 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .bg-opt { aspect-ratio: 1.586; border-radius: 10px; overflow: hidden; border: 2px solid transparent; background: var(--ink); padding: 0; }
 .bg-opt.on { border-color: var(--gold); }
 .bg-opt img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.inc-group { display: flex; flex-direction: column; gap: 8px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.inc-group:last-child { border-bottom: 0; }
+.inc-head { font-size: 16px; font-weight: 600; }
+.inc-tags { padding-left: 14px; border-left: 2px solid var(--line); margin-top: 4px; font-size: 14px; }
 .card-row { display: flex; justify-content: space-between; align-items: flex-start; position: relative; z-index: 1; }
 .card-tier { font-size: 10px; letter-spacing: .3em; color: var(--muted); text-transform: uppercase; }
 .card-j { font-family: var(--f-display); font-size: 40px; line-height: 1; color: var(--gold); }
@@ -940,6 +944,27 @@ function vsRows(cur, avg, isExpense) {
       <div class="bar ${cls}"><i style="width:${Math.min(100, pct)}%"></i></div></div>`;
   }).join("")}</div>`;
 }
+// 收入分三大類：沒列到的分類都算業外收入
+const INCOME_GROUPS = [
+  { name: "薪資收入", tags: ["定期基金", "獎金", "加班費"] },
+  { name: "被動收入", tags: ["利息", "股利"] },
+];
+function incomeGroups(cur, avg) {
+  const all = [...new Set([...Object.keys(cur), ...Object.keys(avg)])].filter(t => cur[t] || avg[t] >= 1);
+  const known = new Set(INCOME_GROUPS.flatMap(g => g.tags));
+  const groups = [...INCOME_GROUPS, { name: "業外收入", tags: all.filter(t => !known.has(t)) }];
+  const out = groups.map(g => {
+    const tags = g.tags.filter(t => all.includes(t)); if (!tags.length) return "";
+    const pick = o => Object.fromEntries(tags.map(t => [t, o[t] ?? 0]));
+    const c = tags.reduce((a, t) => a + (cur[t] ?? 0), 0), a = tags.reduce((x, t) => x + (avg[t] ?? 0), 0);
+    const pct = a > 0 ? Math.round(c / a * 100) : (c > 0 ? 999 : 0);
+    return `<div class="inc-group"><div class="bar-top inc-head"><span>${g.name}</span>
+        <span>${fmt(Math.round(c))} / ${fmt(Math.round(a))}<small>${pct > 998 ? "新" : pct + "%"}</small></span></div>
+      <div class="bar ${pct >= 100 ? "in" : "gold"}"><i style="width:${Math.min(100, pct)}%"></i></div>
+      <div class="inc-tags">${vsRows(pick(cur), pick(avg), false)}</div></div>`;
+  }).join("");
+  return out || `<div class="empty">本月還沒有紀錄。</div>`;
+}
 function vsAverage(bm) {
   const tw = new Date(Date.now() + 8 * 3600e3);
   const curKey = `${tw.getUTCFullYear()}-${String(tw.getUTCMonth() + 1).padStart(2, "0")}`;
@@ -964,7 +989,7 @@ function vsAverage(bm) {
   <section class="sec"><div class="sec-head"><h2>支出分類 vs 平均</h2><span class="label">不含投資</span></div>
     ${vsRows(curTags("expense"), tagAverages(bm, past, "expense", expOf), true)}</section>
   <section class="sec"><div class="sec-head"><h2>收入分類 vs 平均</h2></div>
-    ${vsRows(curTags("income"), tagAverages(bm, past, "income", incOf), false)}</section>`;
+    ${incomeGroups(curTags("income"), tagAverages(bm, past, "income", incOf))}</section>`;
 }
 
 function renderStats() {
