@@ -12,13 +12,13 @@ const HAND_DS = '33cf3ef4-6c02-4a23-aead-e5dbbef56939';   // 🃏 手牌
 const PERKS_DS = '64325c42-b28e-4247-89c9-542c33350347';  // 🎁 權益清單
 const HOUSE_PAGE = '3f48718e-66c1-81a2-99d9-f5ba73555415'; // Notion「🏠 愛情小屋」的「我們的家」那一列
 const HOUSE_FIELDS = { price: '房子總價', down: '頭期款', years: '貸款年數', monthly: '每月還款', rate: '房貸利率' };
-const OPENING_BONUS = 1314;   // 跟 index.html 的 CONFIG.openingBonus 一致
+const OPENING_BONUS = 0;      // 開戶時沒有點數，開新手禮包才送 STARTER_POINTS
 const SITE = 'https://alexhuang0802.github.io';
 const NOTION = { 'Notion-Version': '2025-09-03', 'Content-Type': 'application/json' };
 
 // ===== 遊戲規則 =====
 const DRAW_COOLDOWN = 12 * 3600e3, DRAW_REWARD = 10, PITY = 10, MAX_COPIES = 3;
-const STARTER_DRAWS = 6, STARTER_MIN_CARDS = 2;   // 開戶新手禮包：免費 6 抽，至少 2 張權益卡
+const STARTER_DRAWS = 6, STARTER_MIN_CARDS = 2, STARTER_POINTS = 1314;   // 開戶新手禮包：免費 6 抽，至少 2 張權益卡，送 1,314 點
 const BASE_ODDS = { miss: 40, 普通: 35, 稀有: 17, 傳說: 5, 指定: 3 };          // %
 const RARITY = { 普通: { pts: 20, days: 90 }, 稀有: { pts: 60, days: 90 }, 傳說: { pts: 200, days: 180 }, 指定: { pts: 300, days: 180 } };
 const SHOP = { boost: { title: '傳說機率提升券', price: 300, rarity: '道具' }, wild: { title: '指定卡', price: 1000, rarity: '指定' } };
@@ -251,8 +251,8 @@ export default async function handler(req, res) {
         results.push({ kind, rarity: kind === 'miss' ? null : kind, perkId: perk?.id ?? null, title: perk?.title ?? (kind === '指定' ? '指定卡' : ''),
           line: kind === 'miss' ? LOVE_LINES[randomInt(LOVE_LINES.length)] : '', cardId });
       }
-      await addRow({ type: '新手禮包', title: `開戶新手禮包・${STARTER_DRAWS} 抽`, amount: 0, note: `${cards} 張卡` });
-      return res.status(200).json({ results });
+      await addRow({ type: '新手禮包', title: `開戶新手禮包・${STARTER_DRAWS} 抽＋開戶禮`, amount: STARTER_POINTS, note: `${cards} 張卡` });
+      return res.status(200).json({ results, points: STARTER_POINTS });
     }
     // ===== 發動手牌 =====
     if (body.action === 'play') {

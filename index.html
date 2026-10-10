@@ -6,7 +6,7 @@
 <title>Private Bank 網銀</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,600;6..96,700&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bodoni+Moda:opsz,wght@6..96,400;6..96,600;6..96,700&family=Noto+Sans+TC:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&family=Noto+Serif+TC:wght@600;800&display=swap">
 <style>
 /* Layout: single-column phone banking app, max 440px, fixed bottom tab bar. Deliberately dark-only: a black-card bank. */
 :root {
@@ -158,6 +158,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .sp-front small { font-size: 9.5px; line-height: 1.4; color: #4a1d2e; }
 .sp-card.r-miss .sp-front { background: linear-gradient(160deg, #fbe3ec, #f2b8cd); }
 .sp-em { font-size: 26px; }
+.sp-pts { font-family: "Noto Serif TC", serif; font-weight: 800; font-size: 20px; color: var(--gold); }
 .sp-rar { position: absolute; top: 4px; left: 6px; font-size: 9px; color: var(--rc); }
 
 /* 抽卡動畫：卡背光暈依稀有度 */
@@ -230,8 +231,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 /* 在一起第幾天 */
 .love { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }
 .love-days { display: flex; flex-direction: column; gap: 2px; }
-.love-n { font-family: var(--f-display); font-size: 22px; }
-.love-n b { font-size: 38px; font-weight: 600; color: var(--gold); font-variant-numeric: tabular-nums; }
+.love-n { font-family: "Noto Serif TC", "Songti TC", "PMingLiU", serif; font-size: 20px; font-weight: 600; display: flex; align-items: baseline; gap: 6px; }
+.love-n b { font-size: 40px; font-weight: 800; line-height: 1.1; color: var(--gold); font-variant-numeric: lining-nums tabular-nums; letter-spacing: .01em; }
 .love-list { border-top: 1px solid var(--line); padding-top: 10px; display: flex; flex-direction: column; }
 .love-list .row:last-child { border-bottom: 0; padding-bottom: 0; }
 
@@ -349,7 +350,7 @@ const CONFIG = {
   holderEn: "MY ONLY CUSTOMER",     // 卡面持卡人
   cardNo: "5208 •••• •••• 1314",
   since: "2026/10/05",              // 開戶日
-  openingBonus: 1314,               // 開戶禮點數（要跟 api/points.js 的 OPENING_BONUS 一致）
+  openingBonus: 0,                  // 開戶時沒有點數，開新手禮包才送 1,314 點（見 api/points.js）
   limitText: "無上限",
   pin: "0802",                      // 行員後台密碼（連點左上 logo 5 下）
   pointsApi: "https://love-bank-murex.vercel.app/api/points",                  // 雲端點數 API（Vercel 部署好後填 https://xxx.vercel.app/api/points），空白 = 只存在這支手機
@@ -601,7 +602,7 @@ function applyCloud(j) {
   state.balance = j.balance;
   state.txns = [
     ...j.rows.filter(r => r.type !== "兌換").map(r => ({ id: r.id, at: r.at, title: r.title, note: r.type === "抽卡" ? "" : r.note, amount: r.amount })),
-    { id: "t0", at: t0?.at || now(), title: "生日開戶禮", note: "歡迎成為本行唯一客戶", amount: j.opening },
+    ...(j.opening ? [{ id: "t0", at: t0?.at || now(), title: "生日開戶禮", note: "歡迎成為本行唯一客戶", amount: j.opening }] : []),
   ];
   state.vouchers = [
     ...(j.hand || []).filter(c => c.status === "已發動" || c.status === "已核銷").map(c => ({ id: c.id, perkId: c.perkId, title: c.title, code: c.code, at: c.playedAt || c.at, used: c.status === "已核銷" })),
@@ -699,7 +700,7 @@ function renderGame() {
 
   return `${head}
   ${GAME.starterClaimed === false ? `<button class="starter" data-starter>
-    <span class="st-em">🎁</span><span class="st-t"><b>開戶新手禮包</b><span>免費 6 抽，保證至少 2 張權益卡</span></span><span class="st-go">開包</span></button>` : ""}
+    <span class="st-em">🎁</span><span class="st-t"><b>開戶新手禮包</b></span><span class="st-go">開包</span></button>` : ""}
   <section class="draw-box">
     <div class="deck" aria-hidden="true"><span>${esc(CONFIG.mono)}</span></div>
     ${d.wildMult > 1 ? `<span class="pill boost">🌟 今天是${esc(d.wildReason)}，指定卡機率 ×${d.wildMult}</span>` : ""}
@@ -1013,15 +1014,15 @@ async function doStarter() {
   if (drawing) return; drawing = true;
   const btn = $("[data-starter]"); if (btn) { btn.disabled = true; $(".st-go", btn).textContent = "拆包中…"; }
   try {
-    const { results } = await pointsCall({ action: "starter" });
+    const { results, points } = await pointsCall({ action: "starter" });
     await syncPoints();
-    playStarter(results);
+    playStarter(results, points);
   } catch (e) {
     toast(e.status === 409 ? "新手禮包已經領過了" : "連不上銀行，請稍後再試");
     await syncPoints();
   } finally { drawing = false; }
 }
-function playStarter(results) {
+function playStarter(results, points = 0) {
   const cards = results.filter(r => r.kind !== "miss").length;
   const el = document.createElement("div"); el.className = "summon starter-open"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true");
   el.innerHTML = `<div class="rays" aria-hidden="true"></div>
@@ -1036,6 +1037,7 @@ function playStarter(results) {
       </div></div>`; }).join("")}</div>
     <div class="summon-after" style="animation-delay:${0.9 + results.length * 0.45}s">
       <span class="fresh">獲得 ${cards} 張權益卡${results.length - cards ? `、${results.length - cards} 句情話` : ""}，已收進手牌</span>
+      ${points ? `<span class="sp-pts">開戶禮 +${fmt(points)} 點 💰</span>` : ""}
       <button class="btn pri" data-close>${results.some(r => r.kind === "指定") ? "去挑指定卡" : "收下"}</button></div>`;
   el.addEventListener("click", e => {
     if (!e.target.closest("[data-close]")) return;
@@ -1276,7 +1278,7 @@ function intro() {
   const photo = FUND?.photos?.[0];
   el.innerHTML = `<div class="intro-stage">${cardHTML()}${photo ? `<figure class="polaroid"><span class="fresh">…</span></figure>` : ""}</div>
     <h2>歡迎${esc(CONFIG.customer)}</h2>
-    <p>${esc(CONFIG.bankName)} 今天正式開業。開戶禮 ${fmt(CONFIG.openingBonus)} 點已入帳。</p>
+    <p>${esc(CONFIG.bankName)} 今天正式開業。開戶禮在「抽卡」等妳開包。</p>
     <button class="btn pri" id="activate" style="min-width:200px">啟用我的卡片</button>`;
   document.body.appendChild(el);
   // 合照放在卡片右下角，像拍立得夾在卡片上；圖片跟交易圖片一樣是加密的
