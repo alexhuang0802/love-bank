@@ -480,10 +480,8 @@ function renderHome() {
     <button id="q-cs"><span class="ico">☏</span>專屬理專</button>
   </div>
   <section class="sec"><div class="sec-head"><h2>可使用的憑證</h2>${unused.length ? `<span class="label">${unused.length} 張</span>` : ""}</div>
-    <div class="list">${unused.length ? unused.slice(0, 3).map(voucherRow).join("") : `<div class="empty">還沒有兌換任何權益。到「權益兌換」挑一個吧。</div>`}</div></section>
-  ${fundSection()}
-  <section class="sec"><div class="sec-head"><h2>最近點數交易</h2><button data-go="history" data-hist="points">查看全部</button></div>
-    <div class="list">${state.txns.slice(0, 3).map(txnRow).join("")}</div></section>`;
+    <div class="list">${unused.length ? unused.slice(0, 3).map(voucherRow).join("") : `<div class="empty">手牌裡的卡發動後，憑證會出現在這裡。</div>`}</div></section>
+  ${fundSection()}`;
 }
 
 /* ===== 真實帳戶（Notion ❤️❤️基金） ===== */
@@ -606,7 +604,6 @@ function applyCloud(j) {
   ];
   state.vouchers = [
     ...(j.hand || []).filter(c => c.status === "已發動" || c.status === "已核銷").map(c => ({ id: c.id, perkId: c.perkId, title: c.title, code: c.code, at: c.playedAt || c.at, used: c.status === "已核銷" })),
-    ...j.rows.filter(r => r.type === "兌換").map(r => ({ id: r.id, perkId: r.perkId, title: r.title, code: r.code, at: r.at, used: r.used })),
   ].sort((a, b) => String(b.at).localeCompare(String(a.at)));
   save(); render();
 }
