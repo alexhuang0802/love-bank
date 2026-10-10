@@ -4,7 +4,8 @@
 // 抽卡結果一律在伺服器決定，手機重新整理也無法重抽。
 // 驗證：網頁登入後持有的 AES 金鑰 → SHA-256 → base64 當作 proof；
 //       伺服器用 BANK_PASSWORD + data.enc.json 的 salt 算出同一把金鑰比對，不必傳密碼。
-// 需要環境變數：NOTION_TOKEN、BANK_PASSWORD
+// 行員後台（撥點數、核銷）另外要 ADMIN_PIN，只存在 Vercel，不放網頁原始碼。
+// 需要環境變數：NOTION_TOKEN、BANK_PASSWORD、ADMIN_PIN
 import { pbkdf2Sync, createHash, timingSafeEqual, randomInt } from 'node:crypto';
 
 const POINTS_DS = 'd7643339-684a-4255-ac0c-7e4a74ac1c95'; // 💝 寵愛點數
@@ -25,7 +26,8 @@ const STARTER_DRAWS = 6, STARTER_MIN_CARDS = 2, STARTER_POINTS = 1314;   // 開�
 // 機率與保底以 Notion「⚙️ 抽卡設定」為準；讀不到時用這組預設
 const DEFAULT_ODDS = { miss: 50, 普通: 28, 稀有: 14, 傳說: 5, 指定: 3 };       // %
 const DEFAULT_STARTER_ODDS = { miss: 80, 普通: 15, 稀有: 5, 傳說: 0, 指定: 0 };  // 新手禮包裡隨機那幾抽
-let CFG = { odds: DEFAULT_ODDS, starterOdds: DEFAULT_STARTER_ODDS, lines: null };
+const DEFAULT_BLANK_EVERY = 100;   // 每累積 N 次一般抽卡，多送一張空白卡（新手禮包不算）
+let CFG = { odds: DEFAULT_ODDS, starterOdds: DEFAULT_STARTER_ODDS, lines: null, blankEvery: DEFAULT_BLANK_EVERY };
 const RARITY = { 普通: { pts: 20, days: 90 }, 稀有: { pts: 60, days: 90 }, 傳說: { pts: 200, days: 180 }, 指定: { pts: 300, days: 180 } };
 const SHOP = { boost: { title: '傳說機率提升券', price: 300, rarity: '道具' }, wild: { title: '指定卡', price: 1000, rarity: '指定' } };
 const BIRTHDAY = '04-08';      // 小嘟嘟生日
@@ -72,8 +74,10 @@ async function loadConfig() {
       return sum > 0 ? Object.fromEntries(Object.entries(o).map(([k, v]) => [k, v * 100 / sum])) : fallback;
     };
     const lines = (await queryAll(LINES_DS)).filter(r => r.properties['上架']?.checkbox).map(r => txt(r.properties['情話'])).filter(Boolean);
-    CFG = { odds: table('機率', DEFAULT_ODDS), starterOdds: table('新手禮包', DEFAULT_STARTER_ODDS), lines: lines.length ? lines : null };
-  } catch { CFG = { odds: DEFAULT_ODDS, starterOdds: DEFAULT_STARTER_ODDS, lines: null }; }
+    const blank = rows.find(r => r.type === '空白卡' && r.every >= 1)?.every;
+    CFG = { odds: table('機率', DEFAULT_ODDS), starterOdds: table('新手禮包', DEFAULT_STARTER_ODDS), lines: lines.length ? lines : null,
+      blankEvery: blank ? Math.round(blank) : DEFAULT_BLANK_EVERY };
+  } catch { CFG = { odds: DEFAULT_ODDS, starterOdds: DEFAULT_STARTER_ODDS, lines: null, blankEvery: DEFAULT_BLANK_EVERY }; }
 }
 const loveLine = () => { const l = CFG.lines || LOVE_LINES; return l[randomInt(l.length)]; };
 function roll(odds) {
@@ -260,8 +264,11 @@ export default async function handler(req, res) {
       if (kind === '指定') newCard = await addCard({ title: '指定卡', perkId: 'wild', rarity: '指定' });
       else if (perk && !overflow) newCard = await addCard({ title: perk.title, perkId: perk.id, rarity: kind });
       if (boostCard) await setCard(boostCard.id, { '狀態': sel('已使用') });
+      // 第 100、200…次一般抽卡：額外送一張空白卡
+      const drawCount = rows.filter(r => r.type === '抽卡').length + 1;
+      const blank = drawCount % CFG.blankEvery === 0 ? await addCard({ title: '空白卡', perkId: 'blank', rarity: '空白' }) : null;
       return res.status(200).json({
-        result: { kind, rarity: kind === 'miss' ? null : kind, perkId: perk?.id ?? null, title: perk?.title ?? (kind === '指定' ? '指定卡' : ''), line, cardId: newCard?.id ?? null, boosted: !!boostCard, pity: !!st.forced, overflow },
+        result: { blankCardId: blank?.id ?? null, kind, rarity: kind === 'miss' ? null : kind, perkId: perk?.id ?? null, title: perk?.title ?? (kind === '指定' ? '指定卡' : ''), line, cardId: newCard?.id ?? null, boosted: !!boostCard, pity: !!st.forced, overflow },
         reward: DRAW_REWARD, nextAt: new Date(Date.now() + DRAW_COOLDOWN).toISOString(),
       });
     }
@@ -315,6 +322,14 @@ export default async function handler(req, res) {
     // ===== 發動手牌 =====
     if (body.action === 'play') {
       const c = card(body.id);
+      // 空白卡：寫下想要的東西，發動就生效（不會過期、不能分解）
+      if (c?.status === '手牌' && c.rarity === '空白') {
+        const wish = String(body.wish ?? '').trim().slice(0, 100);
+        if (!wish) return fail(400, 'bad_request');
+        const code = newCode(), at = new Date().toISOString();
+        await setCard(c.id, { '卡片': title(wish), '狀態': sel('已發動'), '憑證碼': rt(code), '發動時間': dateProp(at) });
+        return res.status(200).json({ voucher: { id: c.id, title: wish, perkId: 'blank', code, at } });
+      }
       if (!c || c.status !== '手牌' || !['普通', '稀有', '傳說'].includes(c.rarity)) return fail(404, 'not_found');
       const code = newCode(), at = new Date().toISOString();
       await setCard(c.id, { '狀態': sel('已發動'), '憑證碼': rt(code), '發動時間': dateProp(at) });
@@ -342,7 +357,12 @@ export default async function handler(req, res) {
       await addCard({ title: item.title, perkId: body.item === 'boost' ? 'boost' : 'wild', rarity: item.rarity });
       return res.status(200).json({ ok: true });
     }
-    // ===== 行員：撥入點數、核銷 =====
+    // ===== 行員：撥入點數、核銷（要 ADMIN_PIN）=====
+    if (['admin_check', 'grant', 'use'].includes(body.action)) {
+      if (!process.env.ADMIN_PIN) return fail(503, 'admin_not_set');
+      if (!same(body.pin, process.env.ADMIN_PIN)) { await new Promise(r => setTimeout(r, 1500)); return fail(403, 'bad_pin'); }
+      if (body.action === 'admin_check') return res.status(200).json({ ok: true });
+    }
     if (body.action === 'grant') {
       const amount = Math.round(Number(body.amount));
       if (!amount) return fail(400, 'bad_request');

@@ -138,9 +138,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .hc-rar { position: absolute; top: 5px; left: 6px; font-size: 10px; color: var(--rc); }
 .hc-n { position: absolute; top: 4px; right: 6px; font-size: 11px; font-family: var(--f-mono); color: var(--text); }
 .hc-exp { font-size: 10px; color: var(--muted); } .hc-exp.soon { color: var(--minus); }
-.r-n { --rc: #a07d5a; } .r-sr { --rc: #a77bd6; } .r-ssr { --rc: #e2c27a; } .r-wild { --rc: #e58fb4; } .r-miss { --rc: #e58fb4; } .r-item { --rc: #7fa8d6; }
+.r-n { --rc: #a07d5a; } .r-sr { --rc: #a77bd6; } .r-ssr { --rc: #e2c27a; } .r-wild { --rc: #e58fb4; } .r-miss { --rc: #e58fb4; } .r-item { --rc: #7fa8d6; } .r-blank { --rc: #f4ead2; }
 .hcard.r-ssr { box-shadow: 0 0 14px rgba(226,194,122,.35); } .hcard.r-wild { box-shadow: 0 0 14px rgba(229,143,180,.35); }
-.pill.r-n, .pill.r-sr, .pill.r-ssr, .pill.r-wild { border-color: var(--rc); color: var(--rc); }
+.hcard.r-blank { background: linear-gradient(160deg, #fbf7ee, #e9dfc6); color: #2a2418; border-color: var(--gold); box-shadow: 0 0 16px rgba(201,177,126,.45); }
+.hcard.r-blank .hc-rar { color: #8a7346; }
+.pill.r-n, .pill.r-sr, .pill.r-ssr, .pill.r-wild, .pill.r-blank { border-color: var(--rc); color: var(--rc); }
 .odds { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
 .odds summary { cursor: pointer; font-size: 14px; }
 .odds p { margin-top: 8px; line-height: 1.6; }
@@ -302,7 +304,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .shot img { width: 100%; max-height: 62vh; object-fit: contain; display: block; }
 .ticket { border: 1px dashed var(--gold); border-radius: 14px; padding: 18px; text-align: center; display: flex; flex-direction: column; gap: 6px; }
 .ticket .code { font-family: var(--f-mono); font-size: 26px; letter-spacing: .2em; color: var(--gold); }
-input { width: 100%; background: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 12px; color: var(--text); font: inherit; }
+input, textarea { width: 100%; background: var(--ink); border: 1px solid var(--line); border-radius: 10px; padding: 12px; color: var(--text); font: inherit; resize: none; font-size: 16px; }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--muted); }
 
 /* Opening ceremony */
@@ -358,7 +360,6 @@ const CONFIG = {
   since: "2026/10/05",              // 開戶日
   openingBonus: 0,                  // 開戶時沒有點數，開新手禮包才送 1,314 點（見 api/points.js）
   limitText: "無上限",
-  pin: "0802",                      // 行員後台密碼（連點左上 logo 5 下）
   vapidPublicKey: "",               // 推播公鑰（npx web-push generate-vapid-keys 的 Public Key），空白 = 不顯示通知按鈕
   pointsApi: "https://love-bank-murex.vercel.app/api/points",                  // 雲端點數 API（Vercel 部署好後填 https://xxx.vercel.app/api/points），空白 = 只存在這支手機
   perks: [
@@ -676,7 +677,7 @@ const perksList = () => FUND?.perks?.length ? FUND.perks : CONFIG.perks;
 
 /* ===== 抽卡遊戲：每 12 小時抽一次，抽到的卡進手牌，發動不用點數；點數拿來買道具 ===== */
 let GAME = null;   // 雲端 API 回傳的完整狀態（手牌、抽卡冷卻、機率、商店）
-const RCLS = { 普通: "r-n", 稀有: "r-sr", 傳說: "r-ssr", 指定: "r-wild", 道具: "r-item" };
+const RCLS = { 普通: "r-n", 稀有: "r-sr", 傳說: "r-ssr", 指定: "r-wild", 道具: "r-item", 空白: "r-blank" };
 // 卡片的圖示、說明、插圖來自加密資料裡的權益清單
 const perkInfo = id => perksList().find(p => p.id === id) || {};
 const inHand = () => (GAME?.hand || []).filter(c => c.status === "手牌");
@@ -688,7 +689,7 @@ function handGroups() {
     if (!g.has(k)) g.set(k, { key: k, perkId: c.perkId, rarity: c.rarity, title: c.title, cards: [] });
     g.get(k).cards.push(c);
   }
-  const order = { 指定: 0, 傳說: 1, 稀有: 2, 普通: 3 };
+  const order = { 空白: -1, 指定: 0, 傳說: 1, 稀有: 2, 普通: 3 };
   return [...g.values()].map(x => ({ ...x, cards: x.cards.sort((a, b) => String(a.expires).localeCompare(String(b.expires))) }))
     .sort((a, b) => order[a.rarity] - order[b.rarity]);
 }
@@ -719,7 +720,7 @@ function renderGame() {
       const info = perkInfo(g.perkId), left = daysLeft(g.cards[0].expires);
       return `<button class="hcard ${RCLS[g.rarity]}" data-card="${esc(g.key)}">
         <span class="hc-rar">${g.rarity}</span>${g.cards.length > 1 ? `<span class="hc-n">×${g.cards.length}</span>` : ""}
-        <span class="hc-em">${g.rarity === "指定" ? "🌟" : esc(info.em || "🎴")}</span>
+        <span class="hc-em">${g.rarity === "指定" ? "🌟" : g.rarity === "空白" ? "🤍" : esc(info.em || "🎴")}</span>
         <b>${esc(g.rarity === "指定" ? "指定卡" : g.title)}</b>
         ${left != null ? `<span class="hc-exp ${left <= 7 ? "soon" : ""}">⏳ ${left} 天</span>` : ""}
       </button>`; }).join("")}</div>`
@@ -1090,7 +1091,8 @@ async function doDraw() {
 async function playDraw(r) {
   const cls = r.kind === "miss" ? "r-miss" : RCLS[r.kind];
   const info = r.perkId ? perkInfo(r.perkId) : {};
-  let art = `<span class="duel-em">${r.kind === "指定" ? "🌟" : esc(info.em || "🎴")}</span>`;
+  const blank = r.kind === "空白";
+  let art = `<span class="duel-em">${r.kind === "指定" ? "🌟" : blank ? "🤍" : esc(info.em || "🎴")}</span>`;
   if (info.img) { try { art = `<img src="${await Promise.race([cachedImage(info.img), new Promise((_, x) => setTimeout(x, 2500))])}" alt="">`; } catch (e) {} }
   const front = r.kind === "miss"
     ? `<div class="face front love-card"><span class="lc-em">💌</span><p>${esc(r.line)}</p><span class="duel-foot"><span>${esc(CONFIG.bankName)}</span><span>LOVE</span></span></div>`
@@ -1098,10 +1100,10 @@ async function playDraw(r) {
         <div class="duel-title"><b>${esc(r.kind === "指定" ? "指定卡" : r.title)}</b><span>✦</span></div>
         <div class="duel-art">${art}</div>
         <div class="duel-type">【${r.kind}卡】</div>
-        <div class="duel-desc">${esc(r.kind === "指定" ? "可以換成任何一張權益卡，想要什麼自己挑。" : info.desc || "效果：持卡人想怎樣就怎樣。")}</div>
-        <div class="duel-foot"><span>${esc(CONFIG.bankName)}</span><span>${r.kind === "指定" ? "WILD" : r.kind === "傳說" ? "SSR" : r.kind === "稀有" ? "SR" : "N"}</span></div>
+        <div class="duel-desc">${esc(r.kind === "指定" ? "可以換成任何一張權益卡，想要什麼自己挑。" : blank ? "卡池以外的願望：寫下妳想要的，發動就生效。" : info.desc || "效果：持卡人想怎樣就怎樣。")}</div>
+        <div class="duel-foot"><span>${esc(CONFIG.bankName)}</span><span>${blank ? "BLANK" : r.kind === "指定" ? "WILD" : r.kind === "傳說" ? "SSR" : r.kind === "稀有" ? "SR" : "N"}</span></div>
       </div>`;
-  const after = r.kind === "miss" ? "這次沒抽到卡，+10 點"
+  const after = blank ? "抽卡累積獎勵・已收進手牌，永久有效" : r.kind === "miss" ? "這次沒抽到卡，+10 點"
     : r.overflow ? `這張已經有 3 張了，自動分解 +${r.overflow} 點（另 +10 點）`
     : `已收進手牌・+10 點${r.boosted ? "・提升券已使用" : ""}${r.pity ? "・保底觸發 ✨" : ""}`;
   const el = document.createElement("div"); el.className = `summon draw ${cls}`; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true");
@@ -1109,19 +1111,21 @@ async function playDraw(r) {
     <div class="duel-wrap"><div class="duel-card">
       <div class="face back" aria-hidden="true"><span>${esc(CONFIG.mono)}</span></div>${front}
     </div></div>
-    <div class="summon-after"><span class="label">${r.kind === "miss" ? "沒中" : r.kind === "傳說" ? "傳說卡！" : r.kind === "指定" ? "指定卡！" : r.kind + "卡"}</span>
+    <div class="summon-after"><span class="label">${blank ? "空白卡！" : r.kind === "miss" ? "沒中" : r.kind === "傳說" ? "傳說卡！" : r.kind === "指定" ? "指定卡！" : r.kind + "卡"}</span>
       <span class="fresh">${after}</span>
       <button class="btn pri" data-close>${r.kind === "指定" ? "去挑一張" : "好"}</button></div>`;
   el.addEventListener("click", e => {
     if (!e.target.closest("[data-close]")) return;
     el.remove();
     if (r.kind === "指定" && r.cardId) chooseWild(r.cardId);
+    if (r.blankCardId) playDraw({ kind: "空白", title: "空白卡", line: "", cardId: r.blankCardId });
   });
   document.body.appendChild(el);
 }
 // 點手牌：發動／分解（指定卡：挑一張權益）
 function cardSheet(key) {
   const g = handGroups().find(x => x.key === key); if (!g) return;
+  if (g.rarity === "空白") return blankSheet(g);
   const c = g.cards[0], info = perkInfo(g.perkId), pts = GAME.dismantlePts?.[g.rarity] ?? 0, left = daysLeft(c.expires);
   sheet(`<h3>${g.rarity === "指定" ? "🌟 指定卡" : `${esc(info.em || "🎴")} ${esc(g.title)}`}</h3>
     <span class="pill ${RCLS[g.rarity]}">${g.rarity}${g.cards.length > 1 ? `・持有 ${g.cards.length} 張` : ""}</span>
@@ -1145,6 +1149,26 @@ function cardSheet(key) {
       dis.disabled = true;
       try { await pointsCall({ action: "dismantle", id: c.id }); await syncPoints(); s.remove(); toast(`已分解，+${fmt(pts)} 點`); }
       catch (e) { dis.disabled = false; toast("連不上銀行，請稍後再試"); }
+    };
+  });
+}
+// 空白卡：寫下想要的東西，發動就生效（不會過期、不能分解）
+function blankSheet(g) {
+  const c = g.cards[0];
+  sheet(`<h3>🤍 空白卡</h3>
+    <span class="pill r-blank">空白${g.cards.length > 1 ? `・持有 ${g.cards.length} 張` : ""}</span>
+    <p>卡池以外的願望，寫下妳想要的，發動就生效。</p>
+    <label class="field">妳的願望<textarea id="wish" rows="3" maxlength="100"></textarea></label>
+    <div class="btns"><button class="btn ghost" data-close>先留著</button><button class="btn pri" id="w-go">發動！</button></div>`, s => {
+    const w = $("#wish", s), b = $("#w-go", s); w.focus();
+    b.onclick = async () => {
+      const wish = w.value.trim(); if (!wish) return w.focus();
+      b.disabled = true; b.textContent = "發動中…";
+      try {
+        const { voucher } = await pointsCall({ action: "play", id: c.id, wish });
+        await syncPoints(); s.remove();
+        playCard({ em: "🤍", title: wish, desc: "空白卡兌換的願望，持卡人說了算。", cost: 0 }, voucher);
+      } catch (e) { b.disabled = false; b.textContent = "發動！"; toast("連不上銀行，請稍後再試"); }
     };
   });
 }
@@ -1207,13 +1231,17 @@ function showVoucher(v) {
 }
 
 /* 行員後台 */
-let taps = 0, tapTimer;
+let taps = 0, tapTimer, ADMIN_PIN = "";   // 行員密碼只在伺服器（Vercel ADMIN_PIN）比對，網頁原始碼裡沒有
 function logoTap() { taps++; clearTimeout(tapTimer); tapTimer = setTimeout(() => taps = 0, 1200); if (taps >= 5) { taps = 0; askPin(); } }
 function askPin() {
-  sheet(`<h3>行員登入</h3><label class="field">行員密碼<input id="pin" type="password" inputmode="numeric" autocomplete="off"></label>
+  sheet(`<h3>行員登入</h3><label class="field">行員密碼<input id="pin" type="password" autocomplete="off"></label>
     <div class="btns"><button class="btn ghost" data-close>取消</button><button class="btn pri" id="go">登入</button></div>`, s => {
     const i = $("#pin", s); i.focus();
-    const tryIt = () => { if (i.value === CONFIG.pin) { s.remove(); admin(); } else { i.value = ""; i.placeholder = "密碼錯誤"; } };
+    const tryIt = async () => {
+      const pin = i.value; if (!pin) return;
+      try { await pointsCall({ action: "admin_check", pin }); ADMIN_PIN = pin; s.remove(); admin(); }
+      catch (e) { i.value = ""; i.placeholder = e.status === 403 ? "密碼錯誤" : e.status === 503 ? "後台還沒設定密碼" : "連不上銀行"; }
+    };
     $("#go", s).onclick = tryIt; i.onkeydown = e => e.key === "Enter" && tryIt();
   });
 }
@@ -1231,7 +1259,7 @@ function admin() {
       const n = parseInt($("#a-pts", s).value, 10); if (!n) return;
       const note = $("#a-note", s).value.trim();
       if (cloud()) {
-        try { await pointsCall({ action: "grant", amount: n, note }); await syncPoints(); s.remove(); toast(`已撥入 ${fmt(n)} 點`); }
+        try { await pointsCall({ action: "grant", amount: n, note, pin: ADMIN_PIN }); await syncPoints(); s.remove(); toast(`已撥入 ${fmt(n)} 點`); }
         catch (e) { toast("連不上銀行，請稍後再試"); }
         return;
       }
@@ -1241,7 +1269,7 @@ function admin() {
     s.querySelectorAll("[data-use]").forEach(b => b.onclick = async () => {
       if (cloud()) {
         b.disabled = true;
-        try { await pointsCall({ action: "use", id: b.dataset.use }); await syncPoints(); s.remove(); admin(); toast("已核銷"); }
+        try { await pointsCall({ action: "use", id: b.dataset.use, pin: ADMIN_PIN }); await syncPoints(); s.remove(); admin(); toast("已核銷"); }
         catch (e) { b.disabled = false; toast("連不上銀行，請稍後再試"); }
         return;
       }
