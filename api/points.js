@@ -152,6 +152,7 @@ async function listPerks() {
       // Notion「稀有度」欄位優先；空白才用點數判斷
       rarity: ['普通', '稀有', '傳說'].includes(p['稀有度']?.select?.name) ? p['稀有度'].select.name : rarityOf(p['點數']?.number ?? 0),
       guaranteed: !!p['新手必中']?.checkbox,
+      starterOnly: !!p['只限新手']?.checkbox,   // 只在新手禮包出現，平常抽卡、指定卡都不會有
       pityEvery: p['保底抽數']?.number >= 1 ? Math.round(p['保底抽數'].number) : null,   // 每 N 抽一定會抽到這張
     }));
 }
@@ -234,10 +235,11 @@ export default async function handler(req, res) {
 
     const [rows, hand, perks] = await Promise.all([listRows(), listHand(), listPerks(), loadConfig()]);
     const card = id => hand.find(c => c.id === id);
+    const pool = perks.filter(p => !p.starterOnly);   // 一般卡池（不含只限新手的卡）
 
     // ===== 抽卡 =====
     if (body.action === 'draw') {
-      const st = drawState(rows, perks);
+      const st = drawState(rows, pool);
       if (st.nextAt && Date.parse(st.nextAt) > Date.now()) return fail(429, 'cooldown', { nextAt: st.nextAt });
       const boostCard = body.useBoost ? hand.find(c => c.perkId === 'boost' && c.status === '手牌') : null;
       if (body.useBoost && !boostCard) return fail(409, 'no_boost');
@@ -248,7 +250,7 @@ export default async function handler(req, res) {
         perk = st.forced; kind = perk.rarity;
         if (hand.filter(c => c.perkId === perk.id && c.status === '手牌').length >= MAX_COPIES) overflow = RARITY[kind].pts;
       } else if (kind in RARITY && kind !== '指定') {
-        const all = perks.filter(p => p.rarity === kind);
+        const all = pool.filter(p => p.rarity === kind);
         if (!all.length) kind = 'miss';   // 卡池裡沒有這個稀有度的卡
         else {
           const held = id => hand.filter(c => c.perkId === id && c.status === '手牌').length;
@@ -294,9 +296,9 @@ export default async function handler(req, res) {
         }
         let perk = null;
         if (kind !== 'miss' && kind !== '指定') {
-          const all = perks.filter(p => p.rarity === kind), room = all.filter(p => held(p.id) < MAX_COPIES);
+          const all = pool.filter(p => p.rarity === kind), room = all.filter(p => held(p.id) < MAX_COPIES);
           perk = room.length ? room[randomInt(room.length)] : null;
-          if (!perk) { const any = perks.filter(p => held(p.id) < MAX_COPIES); perk = any.length ? any[randomInt(any.length)] : null; kind = perk ? perk.rarity : 'miss'; }
+          if (!perk) { const any = pool.filter(p => held(p.id) < MAX_COPIES); perk = any.length ? any[randomInt(any.length)] : null; kind = perk ? perk.rarity : 'miss'; }
         }
         let cardId = null;
         if (kind === '指定') cardId = (await addCard({ title: '指定卡', perkId: 'wild', rarity: '指定' })).id;
@@ -337,7 +339,7 @@ export default async function handler(req, res) {
     }
     // ===== 指定卡：選一張想要的權益 =====
     if (body.action === 'choose') {
-      const c = card(body.id), p = perks.find(x => x.id === body.perkId);
+      const c = card(body.id), p = pool.find(x => x.id === body.perkId);
       if (!c || c.status !== '手牌' || c.rarity !== '指定' || !p) return fail(404, 'not_found');
       await setCard(c.id, { '卡片': title(p.title), '權益': rt(p.id), '稀有度': sel(p.rarity), '到期日': dateProp(addDays(RARITY[p.rarity].days)) });
       return res.status(200).json({ ok: true });
@@ -398,7 +400,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       opening: OPENING_BONUS, balance: balanceOf(rows), rows, starterClaimed: rows.some(r => r.type === '新手禮包'),
       hand: hand.filter(c => ['手牌', '已發動', '已核銷'].includes(c.status)),
-      perks, draw: (st => ({ ...st, forced: st.forced?.title ?? null, odds: oddsFor() }))(drawState(rows, perks)), shop: SHOP, dismantlePts: Object.fromEntries(Object.entries(RARITY).map(([k, v]) => [k, v.pts])),
+      perks: pool, draw: (st => ({ ...st, forced: st.forced?.title ?? null, odds: oddsFor() }))(drawState(rows, pool)), shop: SHOP, dismantlePts: Object.fromEntries(Object.entries(RARITY).map(([k, v]) => [k, v.pts])),
       expiredNow: expired.map(c => c.title), cardBg: CFG.cardBgRow?.value || null,
     });
   } catch (e) {
