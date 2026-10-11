@@ -183,6 +183,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .starter .st-go { padding: 7px 14px; border-radius: 99px; background: #e58fb4; color: #2b0f1a; font-weight: 700; font-size: 13px; }
 .sp-title { margin: 0; font-family: var(--f-display); font-weight: 400; font-size: 24px; position: relative; }
 .sp-grid { position: relative; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; width: min(360px, 100%); }
+.face.front.love-card.pts-card { background: linear-gradient(160deg, #fbf3dc, #e8cf94); }
+.face.front.love-card.pts-card p b { font-size: 26px; font-family: var(--f-display); }
 .sp-grid.many { width: min(300px, 100%); gap: 8px; }
 .summon.starter-open { overflow-y: auto; justify-content: safe center; padding-block: 24px; }
 .sp-card { aspect-ratio: 59 / 86; perspective: 700px; animation: rise .4s calc(var(--d) - .35s) ease-out both; }
@@ -1197,29 +1199,22 @@ async function doStarter() {
   } finally { drawing = false; }
 }
 function playStarter(results, points = 0) {
-  const cards = results.filter(r => r.kind !== "miss").length, extra = results.filter(r => r.extra).length;
-  const el = document.createElement("div"); el.className = "summon starter-open"; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true");
-  el.innerHTML = `<div class="rays" aria-hidden="true"></div>
-    <h2 class="sp-title">開戶新手禮包</h2>
-    <div class="sp-grid${results.length > 6 ? " many" : ""}">${results.map((r, i) => {
-      const info = r.perkId ? perkInfo(r.perkId) : {}, cls = r.kind === "miss" ? "r-miss" : RCLS[r.kind];
-      return `<div class="sp-card ${cls}" style="--d:${0.5 + i * 0.45}s"><div class="sp-inner">
-        <div class="sp-face sp-back"><span>${esc(CONFIG.mono)}</span></div>
-        <div class="sp-face sp-front">${r.kind === "miss"
-          ? `<span class="sp-em">💌</span><small>${esc(r.line)}</small>`
-          : `<span class="sp-rar">${r.kind}</span><span class="sp-em">${r.kind === "指定" ? "🌟" : esc(info.em || "🎴")}</span><b>${esc(r.kind === "指定" ? "指定卡" : r.title)}</b>`}</div>
-      </div></div>`; }).join("")}</div>
-    <div class="summon-after" style="animation-delay:${0.9 + results.length * 0.45}s">
-      <span class="fresh">獲得 ${cards - extra} 張權益卡${results.length - cards ? `、${results.length - cards} 句情話` : ""}${extra ? `，再加送 ${extra} 張永久珍藏卡 💝` : ""}，已收進手牌</span>
-      ${points ? `<span class="sp-pts">開戶禮 +${fmt(points)} 點 💰</span>` : ""}
-      <button class="btn pri" data-close>${results.some(r => r.kind === "指定") ? "去挑指定卡" : "收下"}</button></div>`;
-  el.addEventListener("click", e => {
-    if (!e.target.closest("[data-close]")) return;
-    el.remove();
-    const wild = results.find(r => r.kind === "指定" && r.cardId);
-    if (wild) chooseWild(wild.cardId);
-  });
-  document.body.appendChild(el);
+  const items = [...results, ...(points ? [{ kind: "points", points }] : [])];
+  for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]]; }
+  const label = r => r.kind === "points" ? "開戶禮！" : r.kind === "miss" ? "一句情話" : r.kind === "珍藏" ? "額外加送的珍藏卡！" : r.kind === "指定" ? "指定卡！" : r.kind === "傳說" ? "傳說卡！" : r.kind + "卡";
+  const after = r => r.kind === "points" ? "已存入寵愛點數，可以去商店買道具" : r.kind === "miss" ? "這張沒有卡，送妳一句話 💌"
+    : r.kind === "珍藏" ? "永久有效・不能分解，想用的時候再發動" : r.kind === "指定" ? "開完禮包後可以挑一張想要的權益" : "已收進手牌";
+  let i = 0;
+  const next = () => {
+    if (i >= items.length) {
+      const wild = items.find(r => r.kind === "指定" && r.cardId);
+      if (wild) chooseWild(wild.cardId); else toast("新手禮包全部收下了 🎁");
+      return;
+    }
+    const r = items[i++];
+    playDraw(r, { progress: `${i} / ${items.length}`, label: label(r), after: after(r), button: i < items.length ? "下一張" : "收下", onClose: next });
+  };
+  next();
 }
 
 /* ===== 抽卡動作 ===== */
@@ -1238,35 +1233,39 @@ async function doDraw() {
   } finally { drawing = false; }
 }
 // 抽卡動畫：卡背依稀有度發光 → 翻面 → 顯示抽到的卡（或一句情話）
-async function playDraw(r) {
-  const cls = r.kind === "miss" ? "r-miss" : RCLS[r.kind];
+async function playDraw(r, opts = {}) {
+  const cls = r.kind === "miss" ? "r-miss" : r.kind === "points" ? "r-ssr" : RCLS[r.kind];
+  const keep = r.kind === "珍藏";
   const info = r.perkId ? perkInfo(r.perkId) : {};
   const blank = r.kind === "空白";
   let art = `<span class="duel-em">${r.kind === "指定" ? "🌟" : blank ? "🤍" : esc(info.em || "🎴")}</span>`;
   if (info.img) { try { art = `<img src="${await Promise.race([cachedImage(info.img), new Promise((_, x) => setTimeout(x, 2500))])}" alt="">`; } catch (e) {} }
-  const front = r.kind === "miss"
+  const front = r.kind === "points"
+    ? `<div class="face front love-card pts-card"><span class="lc-em">💰</span><p>開戶禮<br><b>+${fmt(r.points)} 點</b></p><span class="duel-foot"><span>${esc(CONFIG.bankName)}</span><span>WELCOME</span></span></div>`
+    : r.kind === "miss"
     ? `<div class="face front love-card"><span class="lc-em">💌</span><p>${esc(r.line)}</p><span class="duel-foot"><span>${esc(CONFIG.bankName)}</span><span>LOVE</span></span></div>`
     : `<div class="face front">
         <div class="duel-title"><b>${esc(r.kind === "指定" ? "指定卡" : r.title)}</b><span>✦</span></div>
         <div class="duel-art">${art}</div>
         <div class="duel-type">【${r.kind}卡】</div>
         <div class="duel-desc">${esc(r.kind === "指定" ? "可以換成任何一張權益卡，想要什麼自己挑。" : blank ? "卡池以外的願望：寫下妳想要的，發動就生效。" : info.desc || "效果：持卡人想怎樣就怎樣。")}</div>
-        <div class="duel-foot"><span>${esc(CONFIG.bankName)}</span><span>${blank ? "BLANK" : r.kind === "指定" ? "WILD" : r.kind === "傳說" ? "SSR" : r.kind === "稀有" ? "SR" : "N"}</span></div>
+        <div class="duel-foot"><span>${esc(CONFIG.bankName)}</span><span>${keep ? "FOREVER" : blank ? "BLANK" : r.kind === "指定" ? "WILD" : r.kind === "傳說" ? "SSR" : r.kind === "稀有" ? "SR" : "N"}</span></div>
       </div>`;
-  const after = blank ? "抽卡累積獎勵・已收進手牌，永久有效" : r.kind === "miss" ? "這次沒抽到卡，+10 點"
+  const after = opts.after ?? (blank ? "抽卡累積獎勵・已收進手牌，永久有效" : r.kind === "miss" ? "這次沒抽到卡，+10 點"
     : r.overflow ? `這張已經有 3 張了，自動分解 +${r.overflow} 點（另 +10 點）`
-    : `已收進手牌・+10 點${r.boosted ? "・提升券已使用" : ""}${r.pity ? "・保底觸發 ✨" : ""}`;
+    : `已收進手牌・+10 點${r.boosted ? "・提升券已使用" : ""}${r.pity ? "・保底觸發 ✨" : ""}`);
   const el = document.createElement("div"); el.className = `summon draw ${cls}`; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true");
   el.innerHTML = `<div class="rays" aria-hidden="true"></div><div class="flash" aria-hidden="true"></div>
     <div class="duel-wrap"><div class="duel-card">
       <div class="face back" aria-hidden="true"><span>${esc(CONFIG.mono)}</span></div>${front}
     </div></div>
-    <div class="summon-after"><span class="label">${blank ? "空白卡！" : r.kind === "miss" ? "沒中" : r.kind === "傳說" ? "傳說卡！" : r.kind === "指定" ? "指定卡！" : r.kind + "卡"}</span>
+    <div class="summon-after">${opts.progress ? `<span class="label">${opts.progress}</span>` : ""}<span class="label">${opts.label ?? ""}${opts.label != null ? "" : blank ? "空白卡！" : r.kind === "miss" ? "沒中" : r.kind === "傳說" ? "傳說卡！" : r.kind === "指定" ? "指定卡！" : r.kind + "卡"}</span>
       <span class="fresh">${after}</span>
-      <button class="btn pri" data-close>${r.kind === "指定" ? "去挑一張" : "好"}</button></div>`;
+      <button class="btn pri" data-close>${opts.button ?? (r.kind === "指定" ? "去挑一張" : "好")}</button></div>`;
   el.addEventListener("click", e => {
     if (!e.target.closest("[data-close]")) return;
     el.remove();
+    if (opts.onClose) return opts.onClose();
     if (r.kind === "指定" && r.cardId) chooseWild(r.cardId);
     if (r.blankCardId) playDraw({ kind: "空白", title: "空白卡", line: "", cardId: r.blankCardId });
   });
