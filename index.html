@@ -1203,7 +1203,7 @@ function playStarter(results, points = 0) {
   for (let i = items.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [items[i], items[j]] = [items[j], items[i]]; }
   const label = r => r.kind === "points" ? "開戶禮！" : r.kind === "miss" ? "一句情話" : r.kind === "珍藏" ? "額外加送的珍藏卡！" : r.kind === "指定" ? "指定卡！" : r.kind === "傳說" ? "傳說卡！" : r.kind + "卡";
   const after = r => r.kind === "points" ? "已存入寵愛點數，可以去商店買道具" : r.kind === "miss" ? "這張沒有卡，送妳一句話 💌"
-    : r.kind === "珍藏" ? "永久有效・不能分解，想用的時候再發動" : r.kind === "指定" ? "開完禮包後可以挑一張想要的權益" : "已收進手牌";
+    : r.kind === "珍藏" ? "已收進手牌" : r.kind === "指定" ? "開完禮包後可以挑一張想要的權益" : "已收進手牌";
   let i = 0;
   const next = () => {
     if (i >= items.length) {
@@ -1280,7 +1280,7 @@ function cardSheet(key) {
     <span class="pill ${RCLS[g.rarity]}">${g.rarity}${g.cards.length > 1 ? `・持有 ${g.cards.length} 張` : ""}</span>
     <p>${esc(g.rarity === "指定" ? "可以換成任何一張權益卡。" : info.desc || "")}</p>
     ${left != null ? `<div class="kv"><span>最快到期</span><span>${left} 天後（${day(c.expires)}）</span></div>` : ""}
-    ${g.rarity === "珍藏" ? `<div class="kv"><span>效期</span><span>永久有效・不能分解</span></div>` : `<div class="kv"><span>分解可得</span><span class="amt plus">+${fmt(pts)} pts</span></div>`}
+    ${g.rarity === "珍藏" ? "" : `<div class="kv"><span>分解可得</span><span class="amt plus">+${fmt(pts)} pts</span></div>`}
     <div class="btns">${g.rarity === "珍藏" ? `<button class="btn ghost" data-close>先收著</button>` : `<button class="btn ghost" id="c-dis">分解 1 張</button>`}
       <button class="btn pri" id="c-go">${g.rarity === "指定" ? "挑一張權益" : "發動！"}</button></div>`, s => {
     $("#c-go", s).onclick = async () => {
