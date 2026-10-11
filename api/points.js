@@ -281,7 +281,7 @@ export default async function handler(req, res) {
       const results = [];
       let cards = 0;
       // 先發「新手必中」的卡（Notion 權益清單勾選的），剩下的抽數再隨機
-      for (const p of perks.filter(x => x.guaranteed).slice(0, STARTER_DRAWS)) {
+      for (const p of perks.filter(x => x.guaranteed && !x.starterOnly).slice(0, STARTER_DRAWS)) {
         const cardId = (await addCard({ title: p.title, perkId: p.id, rarity: p.rarity })).id;
         hand.push({ perkId: p.id, status: '手牌' }); cards++;
         results.push({ kind: p.rarity, rarity: p.rarity, perkId: p.id, title: p.title, line: '', cardId, guaranteed: true });
@@ -307,8 +307,14 @@ export default async function handler(req, res) {
         results.push({ kind, rarity: kind === 'miss' ? null : kind, perkId: perk?.id ?? null, title: perk?.title ?? (kind === '指定' ? '指定卡' : ''),
           line: kind === 'miss' ? loveLine() : '', cardId });
       }
-      await addRow({ type: '新手禮包', title: `開戶新手禮包・${STARTER_DRAWS} 抽＋開戶禮`, amount: STARTER_POINTS, note: `${cards} 張卡` });
       for (let i = results.length - 1; i > 0; i--) { const j = randomInt(i + 1); [results[i], results[j]] = [results[j], results[i]]; }   // 打亂順序，必中的卡不會固定在前面
+      // 額外贈送的珍藏卡（Notion 勾「只限新手」）：不佔 6 抽、放在最後壓軸、永久有效、不能分解
+      const extras = perks.filter(p => p.starterOnly);
+      for (const p of extras) {
+        const cardId = (await addCard({ title: p.title, perkId: p.id, rarity: '珍藏' })).id;
+        results.push({ kind: '珍藏', rarity: '珍藏', perkId: p.id, title: p.title, line: '', cardId, extra: true });
+      }
+      await addRow({ type: '新手禮包', title: `開戶新手禮包・${STARTER_DRAWS} 抽＋開戶禮`, amount: STARTER_POINTS, note: `${cards} 張卡${extras.length ? `＋${extras.length} 張珍藏卡` : ''}` });
       return res.status(200).json({ results, points: STARTER_POINTS });
     }
     // ===== 手機推播訂閱（iPhone 主畫面 App 開通知時呼叫）=====
@@ -332,7 +338,7 @@ export default async function handler(req, res) {
         await setCard(c.id, { '卡片': title(wish), '狀態': sel('已發動'), '憑證碼': rt(code), '發動時間': dateProp(at) });
         return res.status(200).json({ voucher: { id: c.id, title: wish, perkId: 'blank', code, at } });
       }
-      if (!c || c.status !== '手牌' || !['普通', '稀有', '傳說'].includes(c.rarity)) return fail(404, 'not_found');
+      if (!c || c.status !== '手牌' || !['普通', '稀有', '傳說', '珍藏'].includes(c.rarity)) return fail(404, 'not_found');
       const code = newCode(), at = new Date().toISOString();
       await setCard(c.id, { '狀態': sel('已發動'), '憑證碼': rt(code), '發動時間': dateProp(at) });
       return res.status(200).json({ voucher: { id: c.id, title: c.title, perkId: c.perkId, code, at } });
