@@ -1251,7 +1251,7 @@ async function playDraw(r, opts = {}) {
         <div class="duel-desc">${esc(r.kind === "指定" ? "可以換成任何一張權益卡，想要什麼自己挑。" : blank ? "卡池以外的願望：寫下妳想要的，發動就生效。" : info.desc || "效果：持卡人想怎樣就怎樣。")}</div>
         <div class="duel-foot"><span>${esc(CONFIG.bankName)}</span><span>${keep ? "FOREVER" : blank ? "BLANK" : r.kind === "指定" ? "WILD" : r.kind === "傳說" ? "SSR" : r.kind === "稀有" ? "SR" : "N"}</span></div>
       </div>`;
-  const after = opts.after ?? (blank ? "抽卡累積獎勵・已收進手牌，永久有效" : r.kind === "miss" ? "這次沒抽到卡，+10 點"
+  const after = opts.after ?? (blank ? "抽卡累積獎勵・已收進手牌" : r.kind === "miss" ? "這次沒抽到卡，+10 點"
     : r.overflow ? `這張已經有 3 張了，自動分解 +${r.overflow} 點（另 +10 點）`
     : `已收進手牌・+10 點${r.boosted ? "・提升券已使用" : ""}${r.pity ? "・保底觸發 ✨" : ""}`);
   const el = document.createElement("div"); el.className = `summon draw ${cls}`; el.setAttribute("role", "dialog"); el.setAttribute("aria-modal", "true");
