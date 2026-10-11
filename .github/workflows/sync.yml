@@ -3,6 +3,7 @@ name: 同步 ❤️❤️基金
 on:
   schedule:
     - cron: "0 1 * * *"   # 每天台灣時間 09:00（GitHub 排程常會延遲）
+    - cron: "0 9 * * 1-5" # 平日台灣時間 17:00，台股收盤後更新股價
   workflow_dispatch:
 
 permissions:

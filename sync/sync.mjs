@@ -2,6 +2,7 @@
 // 交易頁面內文裡的圖片也會下載、壓縮、加密成 img/*.enc，登入後才看得到。
 // 需要環境變數：NOTION_TOKEN、BANK_PASSWORD。Node 20+；有裝 sharp 才會壓縮圖片（沒裝就原檔加密）。
 import { readFile, writeFile, readdir, unlink, mkdir } from "node:fs/promises";
+import { updatePrices } from "./prices.mjs";
 
 const DS = {
   income:  "1e68718e-66c1-817e-bf85-000b90872144",
@@ -55,6 +56,9 @@ const num = p => p?.type === "number" ? p.number
   : p?.type === "formula" ? (p.formula.number ?? null) : null;
 const date = (...ps) => ps.map(p => p?.date?.start).find(Boolean)?.slice(0, 10) ?? null;
 const tag = p => p?.select?.name ?? "";
+
+// 先把最新股價、匯率寫回 Notion，下面讀到的股票資產就是新的；抓價失敗不影響同步
+try { await updatePrices(await queryAll(DS.stocks), NOTION_HEADERS); } catch (e) { console.log(`股價更新略過：${e.message}`); }
 
 const [incomeRaw, expenseRaw, stockRaw] = await Promise.all([queryAll(DS.income), queryAll(DS.expense), queryAll(DS.stocks)]);
 
