@@ -1,15 +1,15 @@
 // 股票資產自動更新：每次同步先抓最新收盤價寫回 Notion「股價」，美股順便更新「匯率」
-// 台股：證交所 OpenAPI（股票名稱填代號或中文名都可以，例如 0050、川湖）
+// 台股：Yahoo Finance（代號.TW，盤中也會更新）；證交所 OpenAPI 用來把中文名換成代號，Yahoo 抓不到時用它的收盤價（會晚一天）
 // 美股：Yahoo Finance；匯率：台灣銀行即期買入，抓不到就用 Yahoo 的 USD/TWD
 const UA = { "User-Agent": "Mozilla/5.0 (love-bank sync)" };
 
 async function twsePrices() {
   const r = await fetch("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL", { headers: UA });
   if (!r.ok) throw new Error(`TWSE ${r.status}`);
-  const m = new Map();
+  const m = new Map();   // 代號或中文名 → { code, close }
   for (const x of await r.json()) {
-    const p = Number(x.ClosingPrice);
-    if (p > 0) { m.set(x.Code, p); m.set(x.Name, p); }
+    const v = { code: x.Code, close: Number(x.ClosingPrice) || null };
+    m.set(x.Code, v); m.set(x.Name, v);
   }
   return m;
 }
@@ -43,8 +43,11 @@ export async function updatePrices(rows, headers) {
         fx ??= await usdRate();
         props["匯率"] = { number: fx.rate };
       } else {
-        tw ??= await twsePrices();
-        const p = tw.get(s.name);
+        tw ??= await twsePrices().catch(() => new Map());
+        const code = tw.get(s.name)?.code ?? (/^d{4,6}[A-Z]?$/.test(s.name) ? s.name : null);
+        let p = null;
+        if (code) p = await yahooPrice(`${code}.TW`).catch(() => yahooPrice(`${code}.TWO`)).catch(() => null);
+        p ??= tw.get(s.name)?.close;
         if (!p) { console.log(`找不到台股價格：${s.name}`); continue; }
         props["股價"] = { number: p };
       }
