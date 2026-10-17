@@ -14,6 +14,9 @@ const PERKS_DS = '64325c42-b28e-4247-89c9-542c33350347';  // 🎁 權益清單
 const CONFIG_DS = '1feb12cc-2ff5-4581-b607-0787c03c530c'; // ⚙️ 抽卡設定（一般機率、新手禮包機率）
 const LINES_DS = '142db67e-d0ef-4ee6-98ec-591302f1e93f';  // 💌 情話
 const SUBS_DS = 'b9a2dc0a-9b90-407a-ba4f-fc1ace495f5f';   // 🔔 通知訂閱
+const KUJI_DS = '66bccba2-c6bd-4647-a151-e051208d86d8';   // 🎰 一番賞獎品（一盒的獎品與張數）
+const KUJI_LOG_DS = '962263bd-5e5e-4978-a6cc-a4c02753d2d5'; // 🎫 一番賞紀錄（每抽一張一列）
+const DEFAULT_KUJI_PRICE = 100;
 const HOUSE_PAGE = '3f48718e-66c1-81a2-99d9-f5ba73555415'; // Notion「🏠 愛情小屋」的「我們的家」那一列
 const HOUSE_FIELDS = { price: '房子總價', down: '頭期款', years: '貸款年數', monthly: '每月還款', rate: '房貸利率' };
 const OPENING_BONUS = 0;      // 開戶時沒有點數，開新手禮包才送 STARTER_POINTS
@@ -65,7 +68,7 @@ function oddsFor({ boost = false, starter = false } = {}) {
 async function loadConfig() {
   try {
     const rows = (await queryAll(CONFIG_DS)).map(({ id, properties: p }) => ({
-      id, value: txt(p['值']), type: p['類型']?.select?.name, rarity: p['稀有度']?.select?.name, pct: p['機率']?.number, every: p['每幾抽']?.number,
+      id, name: txt(p['名稱']), value: txt(p['值']), type: p['類型']?.select?.name, rarity: p['稀有度']?.select?.name, pct: p['機率']?.number, every: p['每幾抽']?.number,
     }));
     const table = (type, fallback) => {
       const o = { miss: 0, 普通: 0, 稀有: 0, 傳說: 0, 指定: 0 };
@@ -76,7 +79,9 @@ async function loadConfig() {
     const lines = (await queryAll(LINES_DS)).filter(r => r.properties['上架']?.checkbox).map(r => txt(r.properties['情話'])).filter(Boolean);
     const blank = rows.find(r => r.type === '空白卡' && r.every >= 1)?.every;
     CFG = { odds: table('機率', DEFAULT_ODDS), starterOdds: table('新手禮包', DEFAULT_STARTER_ODDS), lines: lines.length ? lines : null,
-      blankEvery: blank ? Math.round(blank) : DEFAULT_BLANK_EVERY, cardBgRow: rows.find(r => r.type === '卡片背景') ?? null };
+      blankEvery: blank ? Math.round(blank) : DEFAULT_BLANK_EVERY, cardBgRow: rows.find(r => r.type === '卡片背景') ?? null,
+      kujiPrice: Number(rows.find(r => r.type === '一番賞' && r.name.includes('點數'))?.value) || DEFAULT_KUJI_PRICE,
+      kujiBoxRow: rows.find(r => r.type === '一番賞' && r.name.includes('盒號')) ?? null };
   } catch { CFG = { odds: DEFAULT_ODDS, starterOdds: DEFAULT_STARTER_ODDS, lines: null, blankEvery: DEFAULT_BLANK_EVERY }; }
 }
 const loveLine = () => { const l = CFG.lines || LOVE_LINES; return l[randomInt(l.length)]; };
@@ -181,6 +186,27 @@ async function dismantle(card, note) {
   if (pts) await addRow({ type: '分解', title: `分解・${card.title}`, amount: pts, note });
   return pts;
 }
+
+// ===== 一番賞：一盒固定張數，抽一張少一張；最後一張抽走時加送 LAST ONE =====
+async function kujiState() {
+  const box = Number(CFG.kujiBoxRow?.value) || 1;
+  const [prizes, logs] = await Promise.all([
+    queryAll(KUJI_DS),
+    queryAll(KUJI_LOG_DS, { filter: { property: '盒號', number: { equals: box } } }),
+  ]);
+  const drawn = {};
+  for (const l of logs) { const id = txt(l.properties['獎品ID']); drawn[id] = (drawn[id] ?? 0) + 1; }
+  const all = prizes.filter(p => p.properties['上架']?.checkbox && txt(p.properties['獎品']))
+    .map(({ id, properties: p }) => ({ id, name: txt(p['獎品']), tier: p['等級']?.select?.name ?? 'F賞', count: Math.max(0, Math.round(p['數量']?.number ?? 0)),
+      em: txt(p['圖示']) || '🎁', desc: txt(p['說明']) }));
+  const items = all.filter(p => p.tier !== 'LAST ONE').map(p => ({ ...p, left: Math.max(0, p.count - (drawn[p.id] ?? 0)) }))
+    .sort((a, b) => a.tier.localeCompare(b.tier));
+  const last = all.find(p => p.tier === 'LAST ONE') ?? null;
+  return { box, price: CFG.kujiPrice || DEFAULT_KUJI_PRICE, items, last, lastTaken: !!(last && drawn[last.id]),
+    total: items.reduce((s, p) => s + p.count, 0), left: items.reduce((s, p) => s + p.left, 0) };
+}
+const logKuji = (p, box, how) => notion('pages', 'POST', { parent: { type: 'data_source_id', data_source_id: KUJI_LOG_DS },
+  properties: { '獎品': title(p.name), '等級': rt(p.tier), '盒號': { number: box }, '獎品ID': rt(p.id), '抽法': rt(how) } });
 
 function drawState(rows, perks) {
   const draws = rows.filter(r => r.type === '抽卡');            // 新到舊
@@ -336,12 +362,15 @@ export default async function handler(req, res) {
         if (!wish) return fail(400, 'bad_request');
         const code = newCode(), at = new Date().toISOString();
         await setCard(c.id, { '卡片': title(wish), '狀態': sel('已發動'), '憑證碼': rt(code), '發動時間': dateProp(at) });
-        return res.status(200).json({ voucher: { id: c.id, title: wish, perkId: 'blank', code, at } });
+        await addCard({ title: '一番賞抽獎券', perkId: 'kuji', rarity: '道具' });   // 發動權益卡送一張一番賞抽獎券
+        return res.status(200).json({ voucher: { id: c.id, title: wish, perkId: 'blank', code, at }, kujiTicket: 1 });
       }
-      if (!c || c.status !== '手牌' || !['普通', '稀有', '傳說', '珍藏'].includes(c.rarity)) return fail(404, 'not_found');
+      if (!c || c.status !== '手牌' || !['普通', '稀有', '傳說', '珍藏', '一番賞'].includes(c.rarity)) return fail(404, 'not_found');
       const code = newCode(), at = new Date().toISOString();
       await setCard(c.id, { '狀態': sel('已發動'), '憑證碼': rt(code), '發動時間': dateProp(at) });
-      return res.status(200).json({ voucher: { id: c.id, title: c.title, perkId: c.perkId, code, at } });
+      const ticket = c.rarity !== '一番賞';   // 一番賞抽到的獎品發動時不再送券，避免無限循環
+      if (ticket) await addCard({ title: '一番賞抽獎券', perkId: 'kuji', rarity: '道具' });
+      return res.status(200).json({ voucher: { id: c.id, title: c.title, perkId: c.perkId, code, at }, kujiTicket: ticket ? 1 : 0 });
     }
     // ===== 指定卡：選一張想要的權益 =====
     if (body.action === 'choose') {
@@ -375,11 +404,40 @@ export default async function handler(req, res) {
         properties: { '名稱': title('首頁卡片背景（網銀自動寫入）'), '類型': sel('卡片背景'), '值': rt(id) } });
       return res.status(200).json({ ok: true });
     }
+    // ===== 一番賞：用抽獎券或點數抽一張 =====
+    if (body.action === 'kuji_draw') {
+      const st = await kujiState();
+      if (st.left <= 0) return fail(409, 'sold_out');
+      const ticket = body.useTicket ? hand.find(c => c.perkId === 'kuji' && c.status === '手牌') : null;
+      if (body.useTicket && !ticket) return fail(409, 'no_ticket');
+      if (!ticket && balanceOf(rows) < st.price) return fail(409, 'insufficient');
+      let n = randomInt(st.left), prize = st.items[0];
+      for (const p of st.items) { if (n < p.left) { prize = p; break; } n -= p.left; }
+      if (ticket) await setCard(ticket.id, { '狀態': sel('已使用') });
+      else await addRow({ type: '一番賞', title: `一番賞・${prize.tier}`, amount: -st.price, note: `第 ${st.box} 盒` });
+      await logKuji(prize, st.box, ticket ? '抽獎券' : '點數');
+      const cardId = (await addCard({ title: `${prize.tier}・${prize.name}`, perkId: prize.id, rarity: '一番賞' })).id;
+      let lastOne = null;
+      if (st.left === 1 && st.last && !st.lastTaken) {   // 抽走最後一張：加送 LAST ONE
+        await logKuji(st.last, st.box, 'LAST ONE');
+        const lid = (await addCard({ title: `LAST ONE・${st.last.name}`, perkId: st.last.id, rarity: '一番賞' })).id;
+        lastOne = { ...st.last, cardId: lid };
+      }
+      return res.status(200).json({ result: { ...prize, cardId }, lastOne, left: st.left - 1, total: st.total });
+    }
     // ===== 行員：撥入點數、核銷（要 ADMIN_PIN）=====
-    if (['admin_check', 'grant', 'use'].includes(body.action)) {
+    if (['admin_check', 'grant', 'use', 'kuji_reset'].includes(body.action)) {
       if (!process.env.ADMIN_PIN) return fail(503, 'admin_not_set');
       if (!same(body.pin, process.env.ADMIN_PIN)) { await new Promise(r => setTimeout(r, 1500)); return fail(403, 'bad_pin'); }
       if (body.action === 'admin_check') return res.status(200).json({ ok: true });
+    }
+    // 一番賞開新盒：盒號 +1，所有獎品回到滿的張數
+    if (body.action === 'kuji_reset') {
+      const box = (Number(CFG.kujiBoxRow?.value) || 1) + 1;
+      if (CFG.kujiBoxRow) await notion(`pages/${CFG.kujiBoxRow.id}`, 'PATCH', { properties: { '值': rt(String(box)) } });
+      else await notion('pages', 'POST', { parent: { type: 'data_source_id', data_source_id: CONFIG_DS },
+        properties: { '名稱': title('一番賞目前盒號（網銀開新盒會自動 +1）'), '類型': sel('一番賞'), '值': rt(String(box)) } });
+      return res.status(200).json({ ok: true, box });
     }
     if (body.action === 'grant') {
       const amount = Math.round(Number(body.amount));
@@ -408,6 +466,7 @@ export default async function handler(req, res) {
       hand: hand.filter(c => ['手牌', '已發動', '已核銷'].includes(c.status)),
       perks: pool, draw: (st => ({ ...st, forced: st.forced?.title ?? null, odds: oddsFor() }))(drawState(rows, pool)), shop: SHOP, dismantlePts: Object.fromEntries(Object.entries(RARITY).map(([k, v]) => [k, v.pts])),
       expiredNow: expired.map(c => c.title), cardBg: CFG.cardBgRow?.value || null,
+      kuji: await kujiState().catch(() => null),
     });
   } catch (e) {
     return fail(502, 'upstream');

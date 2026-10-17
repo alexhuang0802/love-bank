@@ -165,12 +165,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .hc-rar { position: absolute; top: 5px; left: 6px; font-size: 10px; color: var(--rc); }
 .hc-n { position: absolute; top: 4px; right: 6px; font-size: 11px; font-family: var(--f-mono); color: var(--text); }
 .hc-exp { font-size: 10px; color: var(--muted); } .hc-exp.soon { color: var(--minus); }
-.r-n { --rc: #a07d5a; } .r-sr { --rc: #a77bd6; } .r-ssr { --rc: #e2c27a; } .r-wild { --rc: #e58fb4; } .r-miss { --rc: #e58fb4; } .r-item { --rc: #7fa8d6; } .r-blank { --rc: #f4ead2; } .r-keep { --rc: #f3a6c4; }
+.r-n { --rc: #a07d5a; } .r-sr { --rc: #a77bd6; } .r-ssr { --rc: #e2c27a; } .r-wild { --rc: #e58fb4; } .r-miss { --rc: #e58fb4; } .r-item { --rc: #7fa8d6; } .r-blank { --rc: #f4ead2; } .r-keep { --rc: #f3a6c4; } .r-kuji { --rc: #ff9f5a; }
 .hcard.r-ssr { box-shadow: 0 0 14px rgba(226,194,122,.35); } .hcard.r-wild { box-shadow: 0 0 14px rgba(229,143,180,.35); }
+.hcard.r-kuji { box-shadow: 0 0 14px rgba(255,159,90,.4); border-color: var(--rc); }
+.kuji { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; gap: 12px; }
+.kuji-board { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; width: 100%; padding: 0; }
+.kt { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px; border-radius: 10px; background: var(--ink); border: 1px solid var(--line); }
+.kt b { font-size: 13px; color: var(--gold); font-weight: 600; } .kt small { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kt.last b { color: #ff9f5a; } .kt.out { opacity: .35; }
+.kuji-bar { height: 6px; border-radius: 99px; background: var(--ink); overflow: hidden; }
+.kuji-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), #ff9f5a); }
 .hcard.r-keep { box-shadow: 0 0 16px rgba(243,166,196,.45); border-color: var(--rc); }
 .hcard.r-blank { background: linear-gradient(160deg, #fbf7ee, #e9dfc6); color: #2a2418; border-color: var(--gold); box-shadow: 0 0 16px rgba(201,177,126,.45); }
 .hcard.r-blank .hc-rar { color: #8a7346; }
-.pill.r-n, .pill.r-sr, .pill.r-ssr, .pill.r-wild, .pill.r-blank, .pill.r-keep { border-color: var(--rc); color: var(--rc); }
+.pill.r-n, .pill.r-sr, .pill.r-ssr, .pill.r-wild, .pill.r-blank, .pill.r-keep, .pill.r-kuji { border-color: var(--rc); color: var(--rc); }
 .odds { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
 .odds summary { cursor: pointer; font-size: 14px; }
 .odds p { margin-top: 8px; line-height: 1.6; }
@@ -739,9 +747,10 @@ const perksList = () => FUND?.perks?.length ? FUND.perks : CONFIG.perks;
 
 /* ===== 抽卡遊戲：每 12 小時抽一次，抽到的卡進手牌，發動不用點數；點數拿來買道具 ===== */
 let GAME = null;   // 雲端 API 回傳的完整狀態（手牌、抽卡冷卻、機率、商店）
-const RCLS = { 普通: "r-n", 稀有: "r-sr", 傳說: "r-ssr", 指定: "r-wild", 道具: "r-item", 空白: "r-blank", 珍藏: "r-keep" };
+const RCLS = { 普通: "r-n", 稀有: "r-sr", 傳說: "r-ssr", 指定: "r-wild", 道具: "r-item", 空白: "r-blank", 珍藏: "r-keep", 一番賞: "r-kuji" };
 // 卡片的圖示、說明、插圖來自加密資料裡的權益清單
-const perkInfo = id => perksList().find(p => p.id === id) || {};
+const kujiInfo = id => GAME?.kuji?.items?.find(x => x.id === id) || (GAME?.kuji?.last?.id === id ? GAME.kuji.last : null);
+const perkInfo = id => perksList().find(p => p.id === id) || kujiInfo(id) || {};
 const inHand = () => (GAME?.hand || []).filter(c => c.status === "手牌");
 const daysLeft = d => d ? Math.ceil((Date.parse(d) - twToday()) / DAY) : null;
 function handGroups() {
@@ -751,7 +760,7 @@ function handGroups() {
     if (!g.has(k)) g.set(k, { key: k, perkId: c.perkId, rarity: c.rarity, title: c.title, cards: [] });
     g.get(k).cards.push(c);
   }
-  const order = { 珍藏: -2, 空白: -1, 指定: 0, 傳說: 1, 稀有: 2, 普通: 3 };
+  const order = { 一番賞: -3, 珍藏: -2, 空白: -1, 指定: 0, 傳說: 1, 稀有: 2, 普通: 3 };
   return [...g.values()].map(x => ({ ...x, cards: x.cards.sort((a, b) => String(a.expires).localeCompare(String(b.expires))) }))
     .sort((a, b) => order[a.rarity] - order[b.rarity]);
 }
@@ -777,6 +786,8 @@ function renderGame() {
     <span class="fresh">每 12 小時抽一次</span>
   </section>
 
+  ${kujiSection()}
+
   <section class="sec" id="hand-sec"><div class="sec-head"><h2>我的手牌</h2><span class="label">${groups.reduce((s, g) => s + g.cards.length, 0)} 張</span></div>
     ${groups.length ? `<div class="hand">${groups.map(g => {
       const info = perkInfo(g.perkId), left = daysLeft(g.cards[0].expires);
@@ -797,6 +808,47 @@ function renderGame() {
   </section>
 `;
 }
+/* ===== 一番賞：一盒固定張數，抽一張少一張，最後一張加送 LAST ONE ===== */
+const KUJI_TIERS = ["A賞", "B賞", "C賞", "D賞", "E賞", "F賞"];
+function kujiSection() {
+  const k = GAME?.kuji; if (!k || !k.total) return "";
+  const tickets = inHand().filter(c => c.perkId === "kuji").length, sold = k.left <= 0;
+  const tiers = KUJI_TIERS.map(t => { const xs = k.items.filter(x => x.tier === t); return xs.length ? { t, left: xs.reduce((a, x) => a + x.left, 0), total: xs.reduce((a, x) => a + x.count, 0) } : null; }).filter(Boolean);
+  return `<section class="sec kuji">
+    <div class="sec-head"><h2>🎰 一番賞</h2><span class="label">第 ${k.box} 盒・剩 ${k.left} / ${k.total}</span></div>
+    <button class="kuji-board" data-kuji-list>${tiers.map(x => `<span class="kt ${x.left ? "" : "out"}"><b>${x.t}</b><small>${x.left}/${x.total}</small></span>`).join("")}
+      ${k.last ? `<span class="kt last ${k.lastTaken ? "out" : ""}"><b>LAST</b><small>${esc(k.last.em)}</small></span>` : ""}</button>
+    <div class="kuji-bar"><i style="width:${k.total ? (k.total - k.left) / k.total * 100 : 0}%"></i></div>
+    ${sold ? `<div class="empty">這一盒已經完售，等待開新盒 🎉</div>` : `<div class="btns">
+      <button class="btn ghost" data-kuji="ticket" ${tickets ? "" : "disabled"}>🎫 抽獎券（${tickets}）</button>
+      <button class="btn pri" data-kuji="points" ${state.balance < k.price ? "disabled" : ""}>抽一張・${fmt(k.price)} pts</button></div>`}
+    <span class="fresh">發動一張權益卡就送一張抽獎券・抽到最後一張加送 LAST ONE 賞</span>
+  </section>`;
+}
+function kujiList() {
+  const k = GAME?.kuji; if (!k) return;
+  sheet(`<h3>🎰 第 ${k.box} 盒獎品</h3><div class="list">${k.items.map(x => `
+    <div class="row"><div class="meta"><b>${esc(x.em)} ${esc(x.tier)}・${esc(x.name)}</b><span>${esc(x.desc || "")}</span></div><span class="label">${x.left}/${x.count}</span></div>`).join("")}
+    ${k.last ? `<div class="row"><div class="meta"><b>${esc(k.last.em)} LAST ONE・${esc(k.last.name)}</b><span>${esc(k.last.desc || "")}</span></div><span class="label">${k.lastTaken ? "已送出" : "壓軸"}</span></div>` : ""}</div>
+    <button class="btn ghost" data-close>關閉</button>`);
+}
+let kujiBusy = false;
+async function doKuji(useTicket) {
+  if (kujiBusy) return; kujiBusy = true;
+  try {
+    const { result, lastOne, left, total } = await pointsCall({ action: "kuji_draw", useTicket });
+    await syncPoints();
+    const show = (r, label, after, onClose) => playDraw({ kind: "一番賞", title: `${r.tier}・${r.name}`, perkId: r.id, em: r.em, desc: r.desc, tier: r.tier, line: "" },
+      { label, after, button: onClose ? "還有…" : "好", onClose: onClose || (() => {}) });
+    const after = `已收進手牌・這盒還剩 ${left} / ${total} 張`;
+    if (lastOne) show(result, `${result.tier}！`, after, () => show(lastOne, "LAST ONE 賞！", "最後一張是妳抽走的，壓軸大獎送給妳 👑"));
+    else show(result, `${result.tier}！`, after);
+  } catch (e) {
+    toast(e.status === 409 ? "點數或抽獎券不夠，或這盒已經抽完了" : "連不上銀行，請稍後再試");
+    await syncPoints();
+  } finally { kujiBusy = false; }
+}
+
 function startDrawTimer() {
   clearInterval(drawTimer);
   if (tab !== "perks" || !GAME?.draw?.nextAt) return;
@@ -1236,7 +1288,7 @@ async function doDraw() {
 async function playDraw(r, opts = {}) {
   const cls = r.kind === "miss" ? "r-miss" : r.kind === "points" ? "r-ssr" : RCLS[r.kind];
   const keep = r.kind === "珍藏";
-  const info = r.perkId ? perkInfo(r.perkId) : {};
+  const info = { ...(r.perkId ? perkInfo(r.perkId) : {}), ...(r.em ? { em: r.em } : {}), ...(r.desc ? { desc: r.desc } : {}) };
   const blank = r.kind === "空白";
   let art = `<span class="duel-em">${r.kind === "指定" ? "🌟" : blank ? "🤍" : esc(info.em || "🎴")}</span>`;
   if (info.img) { try { art = `<img src="${await Promise.race([cachedImage(info.img), new Promise((_, x) => setTimeout(x, 2500))])}" alt="">`; } catch (e) {} }
@@ -1247,9 +1299,9 @@ async function playDraw(r, opts = {}) {
     : `<div class="face front">
         <div class="duel-title"><b>${esc(r.kind === "指定" ? "指定卡" : r.title)}</b><span>✦</span></div>
         <div class="duel-art">${art}</div>
-        <div class="duel-type">【${r.kind}卡】</div>
+        <div class="duel-type">【${r.kind === "一番賞" ? "一番賞・" + r.tier : r.kind + "卡"}】</div>
         <div class="duel-desc">${esc(r.kind === "指定" ? "可以換成任何一張權益卡，想要什麼自己挑。" : blank ? "卡池以外的願望：寫下妳想要的，發動就生效。" : info.desc || "效果：持卡人想怎樣就怎樣。")}</div>
-        <div class="duel-foot"><span>${esc(CONFIG.bankName)}</span><span>${keep ? "FOREVER" : blank ? "BLANK" : r.kind === "指定" ? "WILD" : r.kind === "傳說" ? "SSR" : r.kind === "稀有" ? "SR" : "N"}</span></div>
+        <div class="duel-foot"><span>${esc(CONFIG.bankName)}</span><span>${r.kind === "一番賞" ? "KUJI" : keep ? "FOREVER" : blank ? "BLANK" : r.kind === "指定" ? "WILD" : r.kind === "傳說" ? "SSR" : r.kind === "稀有" ? "SR" : "N"}</span></div>
       </div>`;
   const after = opts.after ?? (blank ? "抽卡累積獎勵・已收進手牌" : r.kind === "miss" ? "這次沒抽到卡，+10 點"
     : r.overflow ? `這張已經有 3 張了，自動分解 +${r.overflow} 點（另 +10 點）`
@@ -1280,16 +1332,17 @@ function cardSheet(key) {
     <span class="pill ${RCLS[g.rarity]}">${g.rarity}${g.cards.length > 1 ? `・持有 ${g.cards.length} 張` : ""}</span>
     <p>${esc(g.rarity === "指定" ? "可以換成任何一張權益卡。" : info.desc || "")}</p>
     ${left != null ? `<div class="kv"><span>最快到期</span><span>${left} 天後（${day(c.expires)}）</span></div>` : ""}
-    ${g.rarity === "珍藏" ? "" : `<div class="kv"><span>分解可得</span><span class="amt plus">+${fmt(pts)} pts</span></div>`}
-    <div class="btns">${g.rarity === "珍藏" ? `<button class="btn ghost" data-close>先收著</button>` : `<button class="btn ghost" id="c-dis">分解 1 張</button>`}
+    ${["珍藏", "一番賞"].includes(g.rarity) ? "" : `<div class="kv"><span>分解可得</span><span class="amt plus">+${fmt(pts)} pts</span></div>`}
+    <div class="btns">${["珍藏", "一番賞"].includes(g.rarity) ? `<button class="btn ghost" data-close>先收著</button>` : `<button class="btn ghost" id="c-dis">分解 1 張</button>`}
       <button class="btn pri" id="c-go">${g.rarity === "指定" ? "挑一張權益" : "發動！"}</button></div>`, s => {
     $("#c-go", s).onclick = async () => {
       if (g.rarity === "指定") { s.remove(); return chooseWild(c.id); }
       const b = $("#c-go", s); b.disabled = true; b.textContent = "發動中…";
       try {
-        const { voucher } = await pointsCall({ action: "play", id: c.id });
+        const { voucher, kujiTicket } = await pointsCall({ action: "play", id: c.id });
         await syncPoints(); s.remove();
         playCard({ ...info, title: g.title, cost: info.cost ?? 0 }, voucher);
+        if (kujiTicket) setTimeout(() => toast("獲得一番賞抽獎券 ×1 🎫"), 1800);
       } catch (e) { b.disabled = false; b.textContent = "發動！"; toast("連不上銀行，請稍後再試"); }
     };
     const dis = $("#c-dis", s);
@@ -1314,7 +1367,8 @@ function blankSheet(g) {
       const wish = w.value.trim(); if (!wish) return w.focus();
       b.disabled = true; b.textContent = "發動中…";
       try {
-        const { voucher } = await pointsCall({ action: "play", id: c.id, wish });
+        const { voucher, kujiTicket } = await pointsCall({ action: "play", id: c.id, wish });
+        if (kujiTicket) setTimeout(() => toast("獲得一番賞抽獎券 ×1 🎫"), 1800);
         await syncPoints(); s.remove();
         playCard({ em: "🤍", title: wish, desc: "空白卡兌換的願望，持卡人說了算。", cost: 0 }, voucher);
       } catch (e) { b.disabled = false; b.textContent = "發動！"; toast("連不上銀行，請稍後再試"); }
@@ -1403,7 +1457,14 @@ function admin() {
     <div class="sec"><div class="sec-head"><h2>核銷憑證</h2></div><div class="list">${unused.length ? unused.map(v => `
       <div class="row"><div class="meta"><b>${esc(v.title)}</b><span>${v.code}</span></div><button class="pill" data-use="${v.id}">核銷</button></div>`).join("") : `<div class="empty">目前沒有待核銷的憑證。</div>`}</div></div>
     ${cloud() ? `<p>點數存在雲端（Notion「💝 寵愛點數」），要刪紀錄請到 Notion 操作。</p>` : `<button class="btn danger" id="a-reset">重置所有資料</button>`}
+    ${GAME?.kuji ? `<button class="btn ghost" id="a-kuji">🎰 一番賞開新盒（目前第 ${GAME.kuji.box} 盒・剩 ${GAME.kuji.left} 張）</button>` : ""}
     <button class="btn ghost" data-close>離開後台</button>`, s => {
+    const kb = $("#a-kuji", s); if (kb) kb.onclick = async () => {
+      if (!kb.dataset.armed) { kb.dataset.armed = 1; kb.textContent = "確定開新盒？舊盒剩下的籤會作廢"; return; }
+      kb.disabled = true;
+      try { const { box } = await pointsCall({ action: "kuji_reset", pin: ADMIN_PIN }); await syncPoints(); s.remove(); toast(`已開第 ${box} 盒一番賞`); }
+      catch (e) { kb.disabled = false; toast("開新盒失敗，請稍後再試"); }
+    };
     $("#a-add", s).onclick = async () => {
       const n = parseInt($("#a-pts", s).value, 10); if (!n) return;
       const note = $("#a-note", s).value.trim();
@@ -1535,7 +1596,7 @@ function intro() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-chart],[data-pick],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],#logo,#logout,#house-edit,#card"); if (!t) return;
+  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-chart],[data-pick],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],[data-kuji],[data-kuji-list],#logo,#logout,#house-edit,#card"); if (!t) return;
   if (t.id === "card") { if (!t.closest(".intro")) pickCardBg(); return; }
   if (t.dataset.range) { statRange = t.dataset.range; render(); return; }
   if (t.dataset.chart) { chartTab = t.dataset.chart; chartPick = null; render(); return; }
@@ -1551,6 +1612,8 @@ document.addEventListener("click", e => {
   else if (t.dataset.starter !== undefined) doStarter();
   else if (t.dataset.push !== undefined) enablePush();
   else if (t.dataset.buy) buyItem(t.dataset.buy);
+  else if (t.dataset.kuji) doKuji(t.dataset.kuji === "ticket");
+  else if (t.dataset.kujiList !== undefined) kujiList();
   else if (t.id === "logo") logoTap();
 });
 
