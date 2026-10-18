@@ -190,10 +190,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .claw-machine.rise .claw-rope { height: 14px; transition: height .8s ease-out; }
 .claw-chute { position: absolute; left: 0; bottom: 0; width: 13%; height: 52px; border-top: 2px solid #5a4b31; border-right: 2px solid #5a4b31; border-top-right-radius: 8px;
   background: rgba(0,0,0,.35); display: grid; place-items: center; } .claw-chute span { font-size: 10px; color: var(--muted); }
-.doll { position: absolute; bottom: 8px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 1px; }
-.doll b { font-size: 30px; line-height: 1; filter: drop-shadow(0 3px 3px rgba(0,0,0,.5)); } .doll small { font-size: 9px; color: var(--gold); }
-.doll.slip b { animation: slip .38s ease-in; }
-@keyframes slip { from { transform: translateY(-60px); } }
+.doll { position: absolute; line-height: 1; transform: translateX(-50%) rotate(var(--rot, 0deg)); filter: drop-shadow(0 3px 3px rgba(0,0,0,.55)); }
+.doll.slip { animation: slip .38s ease-in; }
+@keyframes slip { from { transform: translateX(-50%) translateY(-60px) rotate(var(--rot, 0deg)); } }
 .claw-sold { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--gold); background: rgba(0,0,0,.55); z-index: 3; }
 .claw-go { width: 100%; }
 .kuji-bar { height: 6px; border-radius: 99px; background: var(--ink); overflow: hidden; }
@@ -849,23 +848,26 @@ function renderGame() {
 /* ===== 一番賞：一盒固定張數，抽一張少一張，最後一張加送 LAST ONE ===== */
 const KUJI_TIERS = ["A賞", "B賞", "C賞", "D賞", "E賞", "F賞"];
 /* ===== 晚上吃什麼夾娃娃機：夾子自己左右甩，按下去就放夾子；夾中機率 30%，連續沒夾到會保夾，每天第一次免費 ===== */
-const CLAW_SLOTS = [22, 35, 48, 61, 74, 87];   // 娃娃在機台裡的位置（%），左邊 0–12% 是出貨口
-let clawDolls = [], clawX = 50, clawDir = 1, clawRaf = 0, clawBusy = false;
+const CLAW_PILE = 16;   // 機台裡一次擺幾個（混在一起堆成一坨）
+let clawDolls = [], clawPileKey = "", clawX = 50, clawDir = 1, clawRaf = 0, clawBusy = false;
 function pickDolls(k) {
-  // 機台裡擺 6 個娃娃：從還有剩的菜色裡隨機挑（剩越多越容易出現），每次重新整理換一批
+  // 從還有剩的菜色裡隨機抓（剩越多越容易出現），隨機位置、高度、角度堆在一起；左邊 0–14% 是出貨口
   const pool = k.items.filter(x => x.left > 0).flatMap(x => Array(x.left).fill(x));
   const out = [];
-  while (out.length < CLAW_SLOTS.length && pool.length) {
-    const i = Math.floor(Math.random() * pool.length), x = pool[i];
-    if (!out.includes(x) || out.length >= new Set(pool.map(p => p.id)).size) out.push(x);
-    pool.splice(i, 1);
+  for (let n = 0; n < CLAW_PILE && pool.length; n++) {
+    const d = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+    const layer = n < 7 ? 0 : n < 12 ? 1 : 2;                 // 底層 7 個、中層 5 個、頂層 4 個
+    const spread = [[19, 92], [24, 86], [30, 80]][layer];
+    out.push({ d, x: spread[0] + Math.random() * (spread[1] - spread[0]), y: [4, 26, 46][layer] + Math.random() * 10,
+      rot: Math.round(Math.random() * 60 - 30), size: 28 + Math.round(Math.random() * 8) });
   }
   return out;
 }
 function kujiSection() {
   const k = GAME?.kuji; if (!k || !k.total) return "";
   const sold = k.left <= 0;
-  if (!clawBusy) clawDolls = sold ? [] : pickDolls(k);
+  const key = `${k.box}-${k.left}`;
+  if (!clawBusy && key !== clawPileKey) { clawDolls = sold ? [] : pickDolls(k); clawPileKey = key; }
   const tiers = KUJI_TIERS.map(t => { const xs = k.items.filter(x => x.tier === t); return xs.length ? { t, left: xs.reduce((a, x) => a + x.left, 0), total: xs.reduce((a, x) => a + x.count, 0) } : null; }).filter(Boolean);
   return `<section class="sec kuji">
     <div class="sec-head"><h2>🕹️ 晚上吃什麼夾娃娃</h2><span class="label">第 ${k.box} 盒・剩 ${k.left} / ${k.total}</span></div>
@@ -876,7 +878,7 @@ function kujiSection() {
       <div class="claw" id="claw" style="left:${clawX}%"><i class="claw-rope"></i><span class="claw-carry"></span>
         <svg class="claw-head" viewBox="0 0 44 34" aria-hidden="true"><rect x="16" y="0" width="12" height="8" rx="2"/><path class="prong l" d="M18 8 L7 20 L11 31"/><path class="prong r" d="M26 8 L37 20 L33 31"/></svg></div>
       <div class="claw-chute"><span>出口</span></div>
-      ${clawDolls.map((d, i) => `<span class="doll" data-doll="${d.id}" style="left:${CLAW_SLOTS[i]}%"><b>${esc(d.em)}</b><small>${esc(d.tier)}</small></span>`).join("")}
+      ${clawDolls.map((p, i) => `<span class="doll" data-i="${i}" style="left:${p.x}%;bottom:${p.y}px;z-index:${Math.round(p.y)};--rot:${p.rot}deg;font-size:${p.size}px">${esc(p.d.em)}</span>`).join("")}
       ${sold ? `<div class="claw-sold">這一盒夾完了 🎉<br><small>等待開新盒</small></div>` : ""}
     </div>
     ${sold ? "" : `<button class="btn pri claw-go" data-claw>${k.nextCost ? `放下夾子・${fmt(k.nextCost)} pts` : "放下夾子・今天免費 🎁"}</button>`}
@@ -904,15 +906,15 @@ async function doClaw() {
   const machine = $("#claw-machine"), claw = $("#claw"), btn = $("[data-claw]");
   if (btn) btn.disabled = true;
   // 夾子底下最近的娃娃（距離 6% 以內才算對準）
-  const near = clawDolls.map((d, i) => ({ d, i, gap: Math.abs(CLAW_SLOTS[i] - clawX) })).sort((a, b) => a.gap - b.gap)[0];
-  const target = near && near.gap <= 6 ? near : null;
+  const target = clawDolls.map((p, i) => ({ d: p.d, i, y: p.y, gap: Math.abs(p.x - clawX) }))
+    .filter(p => p.gap <= 6).sort((a, b) => b.y - a.y || a.gap - b.gap)[0] ?? null;
   const req = pointsCall({ action: "kuji_draw", target: target?.d.id ?? null }).catch(e => ({ error: e }));
   try {
     machine.classList.add("drop"); await wait(750);           // 夾子下降
     machine.classList.add("grab"); await wait(350);           // 夾起來
     const res = await req;
     if (res.error) throw res.error;
-    const dollEl = target && machine.querySelector(`.doll[data-doll="${target.d.id}"]`);
+    const dollEl = target && machine.querySelector(`.doll[data-i="${target.i}"]`);
     if (res.caught && dollEl) { $(".claw-carry", claw).textContent = target.d.em; dollEl.style.visibility = "hidden"; }
     else if (dollEl && res.aimed) { $(".claw-carry", claw).textContent = target.d.em; dollEl.style.visibility = "hidden"; }
     machine.classList.remove("drop"); machine.classList.add("rise");
