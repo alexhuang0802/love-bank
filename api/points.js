@@ -80,7 +80,7 @@ async function loadConfig() {
     const blank = rows.find(r => r.type === '空白卡' && r.every >= 1)?.every;
     CFG = { odds: table('機率', DEFAULT_ODDS), starterOdds: table('新手禮包', DEFAULT_STARTER_ODDS), lines: lines.length ? lines : null,
       blankEvery: blank ? Math.round(blank) : DEFAULT_BLANK_EVERY, cardBgRow: rows.find(r => r.type === '卡片背景') ?? null,
-      kujiPrice: Number(rows.find(r => r.type === '一番賞' && r.name.includes('點數'))?.value) || DEFAULT_KUJI_PRICE,
+      kujiPrice: (v => v !== '' && v != null && Number.isFinite(Number(v)) ? Number(v) : DEFAULT_KUJI_PRICE)(rows.find(r => r.type === '一番賞' && r.name.includes('點數'))?.value),
       kujiBoxRow: rows.find(r => r.type === '一番賞' && r.name.includes('盒號')) ?? null };
   } catch { CFG = { odds: DEFAULT_ODDS, starterOdds: DEFAULT_STARTER_ODDS, lines: null, blankEvery: DEFAULT_BLANK_EVERY }; }
 }
@@ -202,7 +202,7 @@ async function kujiState() {
   const items = all.filter(p => p.tier !== 'LAST ONE').map(p => ({ ...p, left: Math.max(0, p.count - (drawn[p.id] ?? 0)) }))
     .sort((a, b) => a.tier.localeCompare(b.tier));
   const last = all.find(p => p.tier === 'LAST ONE') ?? null;
-  return { box, price: CFG.kujiPrice || DEFAULT_KUJI_PRICE, items, last, lastTaken: !!(last && drawn[last.id]),
+  return { box, price: CFG.kujiPrice ?? DEFAULT_KUJI_PRICE, items, last, lastTaken: !!(last && drawn[last.id]),
     total: items.reduce((s, p) => s + p.count, 0), left: items.reduce((s, p) => s + p.left, 0) };
 }
 const logKuji = (p, box, how) => notion('pages', 'POST', { parent: { type: 'data_source_id', data_source_id: KUJI_LOG_DS },
@@ -362,13 +362,14 @@ export default async function handler(req, res) {
         if (!wish) return fail(400, 'bad_request');
         const code = newCode(), at = new Date().toISOString();
         await setCard(c.id, { '卡片': title(wish), '狀態': sel('已發動'), '憑證碼': rt(code), '發動時間': dateProp(at) });
-        await addCard({ title: '一番賞抽獎券', perkId: 'kuji', rarity: '道具' });   // 發動權益卡送一張一番賞抽獎券
-        return res.status(200).json({ voucher: { id: c.id, title: wish, perkId: 'blank', code, at }, kujiTicket: 1 });
+        const ticket = CFG.kujiPrice > 0;   // 一番賞要付費時，發動權益卡送一張抽獎券；免費抽就不用送
+        if (ticket) await addCard({ title: '一番賞抽獎券', perkId: 'kuji', rarity: '道具' });
+        return res.status(200).json({ voucher: { id: c.id, title: wish, perkId: 'blank', code, at }, kujiTicket: ticket ? 1 : 0 });
       }
       if (!c || c.status !== '手牌' || !['普通', '稀有', '傳說', '珍藏', '一番賞'].includes(c.rarity)) return fail(404, 'not_found');
       const code = newCode(), at = new Date().toISOString();
       await setCard(c.id, { '狀態': sel('已發動'), '憑證碼': rt(code), '發動時間': dateProp(at) });
-      const ticket = c.rarity !== '一番賞';   // 一番賞抽到的獎品發動時不再送券，避免無限循環
+      const ticket = c.rarity !== '一番賞' && CFG.kujiPrice > 0;   // 一番賞抽到的獎品發動時不再送券，避免無限循環
       if (ticket) await addCard({ title: '一番賞抽獎券', perkId: 'kuji', rarity: '道具' });
       return res.status(200).json({ voucher: { id: c.id, title: c.title, perkId: c.perkId, code, at }, kujiTicket: ticket ? 1 : 0 });
     }
@@ -408,22 +409,36 @@ export default async function handler(req, res) {
     if (body.action === 'kuji_draw') {
       const st = await kujiState();
       if (st.left <= 0) return fail(409, 'sold_out');
-      const ticket = body.useTicket ? hand.find(c => c.perkId === 'kuji' && c.status === '手牌') : null;
-      if (body.useTicket && !ticket) return fail(409, 'no_ticket');
-      if (!ticket && balanceOf(rows) < st.price) return fail(409, 'insufficient');
+      const free = st.price <= 0;   // 免費抽：不用點數、不用券，抽到的直接看、不進手牌
+      const ticket = !free && body.useTicket ? hand.find(c => c.perkId === 'kuji' && c.status === '手牌') : null;
+      if (!free && body.useTicket && !ticket) return fail(409, 'no_ticket');
+      if (!free && !ticket && balanceOf(rows) < st.price) return fail(409, 'insufficient');
       let n = randomInt(st.left), prize = st.items[0];
       for (const p of st.items) { if (n < p.left) { prize = p; break; } n -= p.left; }
       if (ticket) await setCard(ticket.id, { '狀態': sel('已使用') });
-      else await addRow({ type: '一番賞', title: `一番賞・${prize.tier}`, amount: -st.price, note: `第 ${st.box} 盒` });
-      await logKuji(prize, st.box, ticket ? '抽獎券' : '點數');
-      const cardId = (await addCard({ title: `${prize.tier}・${prize.name}`, perkId: prize.id, rarity: '一番賞' })).id;
+      else if (!free) await addRow({ type: '一番賞', title: `一番賞・${prize.tier}`, amount: -st.price, note: `第 ${st.box} 盒` });
+      const logId = (await logKuji(prize, st.box, free ? '免費' : ticket ? '抽獎券' : '點數')).id;
+      const cardId = free ? null : (await addCard({ title: `${prize.tier}・${prize.name}`, perkId: prize.id, rarity: '一番賞' })).id;
       let lastOne = null;
       if (st.left === 1 && st.last && !st.lastTaken) {   // 抽走最後一張：加送 LAST ONE
         await logKuji(st.last, st.box, 'LAST ONE');
-        const lid = (await addCard({ title: `LAST ONE・${st.last.name}`, perkId: st.last.id, rarity: '一番賞' })).id;
+        const lid = free ? null : (await addCard({ title: `LAST ONE・${st.last.name}`, perkId: st.last.id, rarity: '一番賞' })).id;
         lastOne = { ...st.last, cardId: lid };
       }
-      return res.status(200).json({ result: { ...prize, cardId }, lastOne, left: st.left - 1, total: st.total });
+      return res.status(200).json({ result: { ...prize, cardId, logId }, lastOne, left: st.left - 1, total: st.total });
+    }
+    // ===== 一番賞：抽到的換成同一個等級的其他獎品（原本那張放回盒子）=====
+    if (body.action === 'kuji_swap') {
+      const st = await kujiState();
+      const to = st.items.find(p => p.id === body.prizeId);
+      const log = await notion(`pages/${String(body.logId ?? '').replace(/[^0-9a-f-]/gi, '')}`, 'GET').catch(() => null);
+      const fromId = log && txt(log.properties['獎品ID']), from = st.items.find(p => p.id === fromId);
+      if (!log || log.parent?.data_source_id?.replace(/-/g, '') !== KUJI_LOG_DS.replace(/-/g, '') || log.properties['盒號']?.number !== st.box) return fail(404, 'not_found');
+      if (!to || !from || to.id === from.id || to.tier !== from.tier || to.left <= 0) return fail(409, 'cannot_swap');
+      await notion(`pages/${log.id}`, 'PATCH', { properties: { '獎品': title(to.name), '獎品ID': rt(to.id) } });
+      const c = body.cardId ? card(body.cardId) : null;   // 付費模式抽到的卡也一起換
+      if (c && c.perkId === from.id && c.status === '手牌') await setCard(c.id, { '卡片': title(`${to.tier}・${to.name}`), '權益': rt(to.id) });
+      return res.status(200).json({ result: { ...to, cardId: c?.id ?? null, logId: log.id } });
     }
     // ===== 行員：撥入點數、核銷（要 ADMIN_PIN）=====
     if (['admin_check', 'grant', 'use', 'kuji_reset'].includes(body.action)) {

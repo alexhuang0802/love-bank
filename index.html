@@ -819,10 +819,10 @@ function kujiSection() {
     <button class="kuji-board" data-kuji-list>${tiers.map(x => `<span class="kt ${x.left ? "" : "out"}"><b>${x.t}</b><small>${x.left}/${x.total}</small></span>`).join("")}
       ${k.last ? `<span class="kt last ${k.lastTaken ? "out" : ""}"><b>LAST</b><small>${esc(k.last.em)}</small></span>` : ""}</button>
     <div class="kuji-bar"><i style="width:${k.total ? (k.total - k.left) / k.total * 100 : 0}%"></i></div>
-    ${sold ? `<div class="empty">這一盒已經完售，等待開新盒 🎉</div>` : `<div class="btns">
+    ${sold ? `<div class="empty">這一盒已經完售，等待開新盒 🎉</div>` : k.price <= 0 ? `<button class="btn pri" data-kuji="points">🎲 抽今晚吃什麼</button>` : `<div class="btns">
       <button class="btn ghost" data-kuji="ticket" ${tickets ? "" : "disabled"}>🎫 抽獎券（${tickets}）</button>
       <button class="btn pri" data-kuji="points" ${state.balance < k.price ? "disabled" : ""}>抽一張・${fmt(k.price)} pts</button></div>`}
-    <span class="fresh">發動一張權益卡就送一張抽獎券・抽到最後一張加送 LAST ONE 賞</span>
+    <span class="fresh">${k.price <= 0 ? "抽到什麼今晚就吃什麼・抽到最後一張加送 LAST ONE 賞" : "發動一張權益卡就送一張抽獎券・抽到最後一張加送 LAST ONE 賞"}</span>
   </section>`;
 }
 function kujiList() {
@@ -838,10 +838,25 @@ async function doKuji(useTicket) {
   try {
     const { result, lastOne, left, total } = await pointsCall({ action: "kuji_draw", useTicket });
     await syncPoints();
+    const same = r => (GAME?.kuji?.items || []).filter(x => x.tier === r.tier && x.id !== r.id && x.left > 0);
     const show = (r, label, after, onClose) => playDraw({ kind: "一番賞", title: `${r.tier}・${r.name}`, perkId: r.id, em: r.em, desc: r.desc, tier: r.tier, line: "" },
-      { label, after, button: onClose ? "還有…" : "好", onClose: onClose || (() => {}) });
-    const after = `已收進手牌・這盒還剩 ${left} / ${total} 張`;
-    if (lastOne) show(result, `${result.tier}！`, after, () => show(lastOne, "LAST ONE 賞！", "最後一張是妳抽走的，壓軸大獎送給妳 👑"));
+      { label, after, button: onClose ? "還有…" : "就這個", onClose: onClose || (() => {}),
+        alt: r.logId && same(r).length ? { text: `換同級的（${same(r).length}）`, onClick: () => swapKuji(r, after, onClose) } : null });
+    const swapKuji = (r, after, onClose) => sheet(`<h3>換成同樣是${esc(r.tier)}的…</h3><div class="list">${same(r).map(x => `
+        <div class="row"><div class="meta"><b>${esc(x.em)} ${esc(x.name)}</b><span>${esc(x.desc || "")}</span></div><button class="pill r-kuji" data-swap="${x.id}">換這個</button></div>`).join("")}</div>
+      <button class="btn ghost" data-close>不換了，就吃${esc(r.name)}</button>`, s => {
+        s.querySelectorAll("[data-swap]").forEach(b => b.onclick = async () => {
+          b.disabled = true;
+          try {
+            const { result: to } = await pointsCall({ action: "kuji_swap", logId: r.logId, prizeId: b.dataset.swap, cardId: r.cardId });
+            await syncPoints(); s.remove();
+            show(to, "換好了！", after, onClose);
+          } catch (e) { b.disabled = false; toast("換不了，這個可能被抽完了"); }
+        });
+      });
+    const free = GAME?.kuji?.price <= 0;
+    const after = free ? `今晚就吃這個！這盒還剩 ${left} / ${total} 張` : `已收進手牌・這盒還剩 ${left} / ${total} 張`;
+    if (lastOne) show(result, `${result.tier}！`, after, () => show(lastOne, "LAST ONE 賞！", free ? "最後一張是妳抽走的，今晚菜單妳說了算 👑" : "最後一張是妳抽走的，壓軸大獎送給妳 👑"));
     else show(result, `${result.tier}！`, after);
   } catch (e) {
     toast(e.status === 409 ? "點數或抽獎券不夠，或這盒已經抽完了" : "連不上銀行，請稍後再試");
@@ -1313,8 +1328,9 @@ async function playDraw(r, opts = {}) {
     </div></div>
     <div class="summon-after">${opts.progress ? `<span class="label">${opts.progress}</span>` : ""}<span class="label">${opts.label ?? ""}${opts.label != null ? "" : blank ? "空白卡！" : r.kind === "miss" ? "沒中" : r.kind === "傳說" ? "傳說卡！" : r.kind === "指定" ? "指定卡！" : r.kind + "卡"}</span>
       <span class="fresh">${after}</span>
-      <button class="btn pri" data-close>${opts.button ?? (r.kind === "指定" ? "去挑一張" : "好")}</button></div>`;
+      ${opts.alt ? `<button class="btn ghost" data-alt>${opts.alt.text}</button>` : ""}<button class="btn pri" data-close>${opts.button ?? (r.kind === "指定" ? "去挑一張" : "好")}</button></div>`;
   el.addEventListener("click", e => {
+    if (opts.alt && e.target.closest("[data-alt]")) { el.remove(); return opts.alt.onClick(); }
     if (!e.target.closest("[data-close]")) return;
     el.remove();
     if (opts.onClose) return opts.onClose();
