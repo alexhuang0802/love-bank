@@ -81,6 +81,8 @@ async function loadConfig() {
     CFG = { odds: table('機率', DEFAULT_ODDS), starterOdds: table('新手禮包', DEFAULT_STARTER_ODDS), lines: lines.length ? lines : null,
       blankEvery: blank ? Math.round(blank) : DEFAULT_BLANK_EVERY, cardBgRow: rows.find(r => r.type === '卡片背景') ?? null,
       kujiPrice: (v => v !== '' && v != null && Number.isFinite(Number(v)) ? Number(v) : DEFAULT_KUJI_PRICE)(rows.find(r => r.type === '一番賞' && r.name.includes('點數'))?.value),
+      clawRate: Number(rows.find(r => r.type === '一番賞' && r.name.includes('機率'))?.value) || 30,
+      clawPity: Math.max(1, Math.round(Number(rows.find(r => r.type === '一番賞' && r.name.includes('保夾'))?.value) || 5)),
       kujiBoxRow: rows.find(r => r.type === '一番賞' && r.name.includes('盒號')) ?? null };
   } catch { CFG = { odds: DEFAULT_ODDS, starterOdds: DEFAULT_STARTER_ODDS, lines: null, blankEvery: DEFAULT_BLANK_EVERY }; }
 }
@@ -190,19 +192,25 @@ async function dismantle(card, note) {
 // ===== 一番賞：一盒固定張數，抽一張少一張；最後一張抽走時加送 LAST ONE =====
 async function kujiState() {
   const box = Number(CFG.kujiBoxRow?.value) || 1;
-  const [prizes, logs] = await Promise.all([
-    queryAll(KUJI_DS),
-    queryAll(KUJI_LOG_DS, { filter: { property: '盒號', number: { equals: box } } }),
-  ]);
+  const [prizes, allLogs] = await Promise.all([queryAll(KUJI_DS), queryAll(KUJI_LOG_DS)]);   // 新到舊
+  const logs = allLogs.filter(l => l.properties['盒號']?.number === box);
   const drawn = {};
-  for (const l of logs) { const id = txt(l.properties['獎品ID']); drawn[id] = (drawn[id] ?? 0) + 1; }
+  for (const l of logs) { const id = txt(l.properties['獎品ID']); if (id) drawn[id] = (drawn[id] ?? 0) + 1; }
+  // 夾娃娃：每天第一次免費（台灣時間），連續沒夾到 N 次就保夾
+  const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+  const tries = allLogs.filter(l => txt(l.properties['抽法']) !== 'LAST ONE');
+  const todayTries = tries.filter(l => new Date(Date.parse(l.created_time) + 8 * 3600e3).toISOString().slice(0, 10) === today).length;
+  let missStreak = 0;
+  for (const l of tries) { if (txt(l.properties['抽法']) === '沒夾到') missStreak++; else break; }
   const all = prizes.filter(p => p.properties['上架']?.checkbox && txt(p.properties['獎品']))
     .map(({ id, properties: p }) => ({ id, name: txt(p['獎品']), tier: p['等級']?.select?.name ?? 'F賞', count: Math.max(0, Math.round(p['數量']?.number ?? 0)),
       em: txt(p['圖示']) || '🎁', desc: txt(p['說明']) }));
   const items = all.filter(p => p.tier !== 'LAST ONE').map(p => ({ ...p, left: Math.max(0, p.count - (drawn[p.id] ?? 0)) }))
     .sort((a, b) => a.tier.localeCompare(b.tier));
   const last = all.find(p => p.tier === 'LAST ONE') ?? null;
-  return { box, price: CFG.kujiPrice ?? DEFAULT_KUJI_PRICE, items, last, lastTaken: !!(last && drawn[last.id]),
+  const pity = CFG.clawPity ?? 5, price = CFG.kujiPrice ?? DEFAULT_KUJI_PRICE;
+  return { box, price, nextCost: todayTries >= 1 ? price : 0, todayTries, missStreak, pity, pityLeft: Math.max(1, pity - missStreak), rate: CFG.clawRate ?? 30,
+    items, last, lastTaken: !!(last && drawn[last.id]),
     total: items.reduce((s, p) => s + p.count, 0), left: items.reduce((s, p) => s + p.left, 0) };
 }
 const logKuji = (p, box, how) => notion('pages', 'POST', { parent: { type: 'data_source_id', data_source_id: KUJI_LOG_DS },
@@ -362,14 +370,14 @@ export default async function handler(req, res) {
         if (!wish) return fail(400, 'bad_request');
         const code = newCode(), at = new Date().toISOString();
         await setCard(c.id, { '卡片': title(wish), '狀態': sel('已發動'), '憑證碼': rt(code), '發動時間': dateProp(at) });
-        const ticket = CFG.kujiPrice > 0;   // 一番賞要付費時，發動權益卡送一張抽獎券；免費抽就不用送
+        const ticket = false;   // 夾娃娃不用抽獎券了
         if (ticket) await addCard({ title: '一番賞抽獎券', perkId: 'kuji', rarity: '道具' });
         return res.status(200).json({ voucher: { id: c.id, title: wish, perkId: 'blank', code, at }, kujiTicket: ticket ? 1 : 0 });
       }
       if (!c || c.status !== '手牌' || !['普通', '稀有', '傳說', '珍藏', '一番賞'].includes(c.rarity)) return fail(404, 'not_found');
       const code = newCode(), at = new Date().toISOString();
       await setCard(c.id, { '狀態': sel('已發動'), '憑證碼': rt(code), '發動時間': dateProp(at) });
-      const ticket = c.rarity !== '一番賞' && CFG.kujiPrice > 0;   // 一番賞抽到的獎品發動時不再送券，避免無限循環
+      const ticket = false;   // 夾娃娃不用抽獎券了   // 一番賞抽到的獎品發動時不再送券，避免無限循環
       if (ticket) await addCard({ title: '一番賞抽獎券', perkId: 'kuji', rarity: '道具' });
       return res.status(200).json({ voucher: { id: c.id, title: c.title, perkId: c.perkId, code, at }, kujiTicket: ticket ? 1 : 0 });
     }
@@ -409,23 +417,26 @@ export default async function handler(req, res) {
     if (body.action === 'kuji_draw') {
       const st = await kujiState();
       if (st.left <= 0) return fail(409, 'sold_out');
-      const free = st.price <= 0;   // 免費抽：不用點數、不用券，抽到的直接看、不進手牌
-      const ticket = !free && body.useTicket ? hand.find(c => c.perkId === 'kuji' && c.status === '手牌') : null;
-      if (!free && body.useTicket && !ticket) return fail(409, 'no_ticket');
-      if (!free && !ticket && balanceOf(rows) < st.price) return fail(409, 'insufficient');
-      let n = randomInt(st.left), prize = st.items[0];
-      for (const p of st.items) { if (n < p.left) { prize = p; break; } n -= p.left; }
-      if (ticket) await setCard(ticket.id, { '狀態': sel('已使用') });
-      else if (!free) await addRow({ type: '一番賞', title: `一番賞・${prize.tier}`, amount: -st.price, note: `第 ${st.box} 盒` });
-      const logId = (await logKuji(prize, st.box, free ? '免費' : ticket ? '抽獎券' : '點數')).id;
-      const cardId = free ? null : (await addCard({ title: `${prize.tier}・${prize.name}`, perkId: prize.id, rarity: '一番賞' })).id;
-      let lastOne = null;
-      if (st.left === 1 && st.last && !st.lastTaken) {   // 抽走最後一張：加送 LAST ONE
-        await logKuji(st.last, st.box, 'LAST ONE');
-        const lid = free ? null : (await addCard({ title: `LAST ONE・${st.last.name}`, perkId: st.last.id, rarity: '一番賞' })).id;
-        lastOne = { ...st.last, cardId: lid };
+      // 夾娃娃：夾子停在哪個獎品上面就夾那個；夾中機率 30%，連續沒夾到到保夾次數就一定夾到
+      const cost = st.nextCost;
+      if (cost > 0 && balanceOf(rows) < cost) return fail(409, 'insufficient');
+      const target = st.items.find(p => p.id === body.target && p.left > 0) ?? null;
+      const pityHit = st.missStreak + 1 >= st.pity;
+      const caught = !!target && (pityHit || randomInt(100) < st.rate);
+      if (cost > 0) await addRow({ type: '一番賞', title: `夾娃娃・${caught ? target.name : '沒夾到'}`, amount: -cost, note: `第 ${st.box} 盒` });
+      const after = { todayTries: st.todayTries + 1, nextCost: st.price, missStreak: caught ? 0 : st.missStreak + 1 };
+      after.pityLeft = Math.max(1, st.pity - after.missStreak);
+      if (!caught) {
+        await logKuji({ name: '沒夾到', tier: '', id: '' }, st.box, '沒夾到');
+        return res.status(200).json({ caught: false, aimed: !!target, cost, ...after, left: st.left, total: st.total });
       }
-      return res.status(200).json({ result: { ...prize, cardId, logId }, lastOne, left: st.left - 1, total: st.total });
+      const logId = (await logKuji(target, st.box, pityHit ? '保夾' : '夾到')).id;
+      let lastOne = null;
+      if (st.left === 1 && st.last && !st.lastTaken) {   // 夾走最後一個：加送 LAST ONE
+        await logKuji(st.last, st.box, 'LAST ONE');
+        lastOne = { ...st.last, cardId: null };
+      }
+      return res.status(200).json({ caught: true, pity: pityHit, cost, ...after, result: { ...target, cardId: null, logId }, lastOne, left: st.left - 1, total: st.total });
     }
     // ===== 一番賞「自訂」：抽到後寫下想吃的，記在紀錄裡 =====
     if (body.action === 'kuji_note') {
