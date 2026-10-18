@@ -815,7 +815,7 @@ function kujiSection() {
   const tickets = inHand().filter(c => c.perkId === "kuji").length, sold = k.left <= 0;
   const tiers = KUJI_TIERS.map(t => { const xs = k.items.filter(x => x.tier === t); return xs.length ? { t, left: xs.reduce((a, x) => a + x.left, 0), total: xs.reduce((a, x) => a + x.count, 0) } : null; }).filter(Boolean);
   return `<section class="sec kuji">
-    <div class="sec-head"><h2>🎰 一番賞</h2><span class="label">第 ${k.box} 盒・剩 ${k.left} / ${k.total}</span></div>
+    <div class="sec-head"><h2>🍽️ 晚上吃什麼一番賞</h2><span class="label">第 ${k.box} 盒・剩 ${k.left} / ${k.total}</span></div>
     <button class="kuji-board" data-kuji-list>${tiers.map(x => `<span class="kt ${x.left ? "" : "out"}"><b>${x.t}</b><small>${x.left}/${x.total}</small></span>`).join("")}
       ${k.last ? `<span class="kt last ${k.lastTaken ? "out" : ""}"><b>LAST</b><small>${esc(k.last.em)}</small></span>` : ""}</button>
     <div class="kuji-bar"><i style="width:${k.total ? (k.total - k.left) / k.total * 100 : 0}%"></i></div>
@@ -827,7 +827,7 @@ function kujiSection() {
 }
 function kujiList() {
   const k = GAME?.kuji; if (!k) return;
-  sheet(`<h3>🎰 第 ${k.box} 盒獎品</h3><div class="list">${k.items.map(x => `
+  sheet(`<h3>🍽️ 第 ${k.box} 盒菜單</h3><div class="list">${k.items.map(x => `
     <div class="row"><div class="meta"><b>${esc(x.em)} ${esc(x.tier)}・${esc(x.name)}</b><span>${esc(x.desc || "")}</span></div><span class="label">${x.left}/${x.count}</span></div>`).join("")}
     ${k.last ? `<div class="row"><div class="meta"><b>${esc(k.last.em)} LAST ONE・${esc(k.last.name)}</b><span>${esc(k.last.desc || "")}</span></div><span class="label">${k.lastTaken ? "已送出" : "壓軸"}</span></div>` : ""}</div>
     <button class="btn ghost" data-close>關閉</button>`);
