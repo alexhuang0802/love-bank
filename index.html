@@ -190,9 +190,26 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .claw-machine.rise .claw-rope { height: 14px; transition: height .8s ease-out; }
 .claw-chute { position: absolute; left: 0; bottom: 0; width: 13%; height: 52px; border-top: 2px solid #5a4b31; border-right: 2px solid #5a4b31; border-top-right-radius: 8px;
   background: rgba(0,0,0,.35); display: grid; place-items: center; } .claw-chute span { font-size: 10px; color: var(--muted); }
-.doll { position: absolute; line-height: 1; transform: translateX(-50%) rotate(var(--rot, 0deg)); filter: drop-shadow(0 3px 3px rgba(0,0,0,.55)); }
-.doll.slip { animation: slip .38s ease-in; }
+.cap { position: absolute; display: block; width: 34px; height: 34px; border-radius: 50%; transform: translateX(-50%) rotate(var(--rot, 0deg));
+  background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.75) 0 12%, transparent 13%), linear-gradient(180deg, var(--c) 0 50%, #f6f2ea 50% 100%);
+  box-shadow: inset 0 -3px 6px rgba(0,0,0,.18), inset 0 0 0 1.5px rgba(0,0,0,.18), 0 3px 4px rgba(0,0,0,.45); }
+.cap::after { content: ""; position: absolute; left: 0; right: 0; top: calc(50% - 1px); height: 2px; background: rgba(0,0,0,.18); }
+.cap.slip { animation: slip .38s ease-in; }
+.cap.mini { position: relative; width: 26px; height: 26px; transform: none; }
+.claw-ctrl { display: grid; grid-template-columns: 1fr 1.6fr 1fr; gap: 8px; }
+.claw-ctrl .btn { font-size: 20px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.claw-ctrl [data-claw] { font-size: 18px; } .claw-ctrl small { font-size: 12px; margin-left: 6px; opacity: .7; font-variant-numeric: tabular-nums; }
+.claw-machine.on { box-shadow: inset 0 0 30px rgba(0,0,0,.6), 0 0 18px rgba(201,177,126,.35); }
+.summon.cap-open { background: rgba(0,0,0,.82); }
+.big-cap { position: relative; width: 150px; height: 150px; animation: cap-shake .9s ease-in-out; }
+.big-cap i { position: absolute; left: 0; right: 0; height: 50%; transition: transform .45s cubic-bezier(.3,1.4,.5,1), opacity .45s; }
+.big-cap .top { top: 0; border-radius: 75px 75px 0 0; background: radial-gradient(circle at 32% 40%, rgba(255,255,255,.7) 0 12%, transparent 13%), var(--c); box-shadow: inset 0 0 0 3px rgba(0,0,0,.15); }
+.big-cap .bot { bottom: 0; border-radius: 0 0 75px 75px; background: #f6f2ea; box-shadow: inset 0 0 0 3px rgba(0,0,0,.15); }
+.cap-open.open .big-cap .top { transform: translateY(-80px) rotate(-25deg); opacity: 0; }
+.cap-open.open .big-cap .bot { transform: translateY(60px); opacity: 0; }
+@keyframes cap-shake { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-12deg); } 40% { transform: rotate(10deg); } 60% { transform: rotate(-8deg); } 80% { transform: rotate(5deg); } }
 @keyframes slip { from { transform: translateX(-50%) translateY(-60px) rotate(var(--rot, 0deg)); } }
+.claw-carry .cap { margin-bottom: -6px; }
 .claw-sold { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--gold); background: rgba(0,0,0,.55); z-index: 3; }
 .claw-go { width: 100%; }
 .kuji-bar { height: 6px; border-radius: 99px; background: var(--ink); overflow: hidden; }
@@ -847,92 +864,124 @@ function renderGame() {
 }
 /* ===== 一番賞：一盒固定張數，抽一張少一張，最後一張加送 LAST ONE ===== */
 const KUJI_TIERS = ["A賞", "B賞", "C賞", "D賞", "E賞", "F賞"];
-/* ===== 晚上吃什麼夾娃娃機：夾子自己左右甩，按下去就放夾子；夾中機率 30%，連續沒夾到會保夾，每天第一次免費 ===== */
-const CLAW_PILE = 16;   // 機台裡一次擺幾個（混在一起堆成一坨）
-let clawDolls = [], clawPileKey = "", clawX = 50, clawDir = 1, clawRaf = 0, clawBusy = false;
+/* ===== 晚上吃什麼夾娃娃機：按「開始」才能動，按住 ◀ ▶ 移動夾子，按「夾！」放下去（15 秒沒按會自己放）；
+   裡面是看不到內容的扭蛋，夾到才打開。夾中機率 30%，連續沒夾到會保夾，每天第一次免費 ===== */
+const CLAW_PILE = 16, CLAW_HOME = 7, CLAW_TIME = 15;
+const CAP_COLORS = ["#f28b9b", "#f5c26b", "#8fc9a3", "#7fb2e6", "#c39be0", "#f0a35e", "#6fd1c9", "#ef7f7f"];
+let clawDolls = [], clawPileKey = "", clawX = CLAW_HOME, clawBusy = false, clawOn = false, clawMoveT = 0, clawTick = 0, clawLeft = 0;
 function pickDolls(k) {
-  // 從還有剩的菜色裡隨機抓（剩越多越容易出現），隨機位置、高度、角度堆在一起；左邊 0–14% 是出貨口
+  // 從還有剩的菜色裡隨機抓（剩越多越容易出現），包成扭蛋亂堆；扭蛋顏色隨機，跟等級無關
   const pool = k.items.filter(x => x.left > 0).flatMap(x => Array(x.left).fill(x));
   const out = [];
   for (let n = 0; n < CLAW_PILE && pool.length; n++) {
     const d = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
-    const layer = n < 7 ? 0 : n < 12 ? 1 : 2;                 // 底層 7 個、中層 5 個、頂層 4 個
-    const spread = [[19, 92], [24, 86], [30, 80]][layer];
-    out.push({ d, x: spread[0] + Math.random() * (spread[1] - spread[0]), y: [4, 26, 46][layer] + Math.random() * 10,
-      rot: Math.round(Math.random() * 60 - 30), size: 28 + Math.round(Math.random() * 8) });
+    const layer = n < 7 ? 0 : n < 12 ? 1 : 2;
+    const spread = [[20, 93], [25, 88], [31, 82]][layer];
+    out.push({ d, x: spread[0] + Math.random() * (spread[1] - spread[0]), y: [4, 26, 46][layer] + Math.random() * 8,
+      rot: Math.round(Math.random() * 80 - 40), size: 32 + Math.round(Math.random() * 6), color: CAP_COLORS[Math.floor(Math.random() * CAP_COLORS.length)] });
   }
   return out;
 }
+const capHTML = (color, extra = "") => `<span class="cap ${extra}" style="--c:${color}"></span>`;
 function kujiSection() {
   const k = GAME?.kuji; if (!k || !k.total) return "";
   const sold = k.left <= 0;
   const key = `${k.box}-${k.left}`;
   if (!clawBusy && key !== clawPileKey) { clawDolls = sold ? [] : pickDolls(k); clawPileKey = key; }
   const tiers = KUJI_TIERS.map(t => { const xs = k.items.filter(x => x.tier === t); return xs.length ? { t, left: xs.reduce((a, x) => a + x.left, 0), total: xs.reduce((a, x) => a + x.count, 0) } : null; }).filter(Boolean);
+  const ctrl = sold ? "" : clawOn || clawBusy
+    ? `<div class="claw-ctrl"><button class="btn ghost" data-claw-move="-1" aria-label="往左" ${clawBusy ? "disabled" : ""}>◀</button>
+        <button class="btn pri" data-claw ${clawBusy ? "disabled" : ""}>夾！<small id="claw-time">${clawLeft}</small></button>
+        <button class="btn ghost" data-claw-move="1" aria-label="往右" ${clawBusy ? "disabled" : ""}>▶</button></div>`
+    : `<button class="btn pri claw-go" data-claw-start>${k.nextCost ? `開始・${fmt(k.nextCost)} pts` : "開始・今天免費 🎁"}</button>`;
   return `<section class="sec kuji">
     <div class="sec-head"><h2>🕹️ 晚上吃什麼夾娃娃</h2><span class="label">第 ${k.box} 盒・剩 ${k.left} / ${k.total}</span></div>
     <button class="kuji-board" data-kuji-list>${tiers.map(x => `<span class="kt ${x.left ? "" : "out"}"><b>${x.t}</b><small>${x.left}/${x.total}</small></span>`).join("")}
       ${k.last ? `<span class="kt last ${k.lastTaken ? "out" : ""}"><b>LAST</b><small>${esc(k.last.em)}</small></span>` : ""}</button>
-    <div class="claw-machine" id="claw-machine">
+    <div class="claw-machine ${clawOn ? "on" : ""}" id="claw-machine">
       <div class="claw-rail"></div>
       <div class="claw" id="claw" style="left:${clawX}%"><i class="claw-rope"></i><span class="claw-carry"></span>
         <svg class="claw-head" viewBox="0 0 44 34" aria-hidden="true"><rect x="16" y="0" width="12" height="8" rx="2"/><path class="prong l" d="M18 8 L7 20 L11 31"/><path class="prong r" d="M26 8 L37 20 L33 31"/></svg></div>
       <div class="claw-chute"><span>出口</span></div>
-      ${clawDolls.map((p, i) => `<span class="doll" data-i="${i}" style="left:${p.x}%;bottom:${p.y}px;z-index:${Math.round(p.y)};--rot:${p.rot}deg;font-size:${p.size}px">${esc(p.d.em)}</span>`).join("")}
+      ${clawDolls.map((p, i) => `<span class="cap" data-i="${i}" style="--c:${p.color};left:${p.x}%;bottom:${p.y}px;z-index:${Math.round(p.y)};--rot:${p.rot}deg;width:${p.size}px;height:${p.size}px"></span>`).join("")}
       ${sold ? `<div class="claw-sold">這一盒夾完了 🎉<br><small>等待開新盒</small></div>` : ""}
     </div>
-    ${sold ? "" : `<button class="btn pri claw-go" data-claw>${k.nextCost ? `放下夾子・${fmt(k.nextCost)} pts` : "放下夾子・今天免費 🎁"}</button>`}
-    <span class="fresh">夾子會左右甩，看準了再按・再 ${k.pityLeft} 次一定夾到・每天第一次免費</span>
+    ${ctrl}
+    <span class="fresh">${clawOn ? "按住 ◀ ▶ 移動夾子，對準了按「夾！」" : `按開始後自己移動夾子・再 ${k.pityLeft} 次一定夾到・每天第一次免費`}</span>
   </section>`;
 }
+// 每次畫面重畫後：夾子放回目前位置；遊戲中的話繼續倒數
 function startClaw() {
-  cancelAnimationFrame(clawRaf);
-  const step = () => {
-    const el = $("#claw"); if (!el) return;
-    if (!clawBusy) {
-      clawX += clawDir * 0.55;
-      if (clawX > 90) { clawX = 90; clawDir = -1; } else if (clawX < 18) { clawX = 18; clawDir = 1; }
-      el.style.left = clawX + "%";
-    }
-    clawRaf = requestAnimationFrame(step);
-  };
-  clawRaf = requestAnimationFrame(step);
+  const el = $("#claw"); if (el) el.style.left = clawX + "%";
+  if (clawOn && !clawTick) clawTick = setInterval(() => {
+    clawLeft--; const t = $("#claw-time"); if (t) t.textContent = clawLeft;
+    if (clawLeft <= 0) doClaw();
+  }, 1000);
 }
-const wait = ms => new Promise(r => setTimeout(r, ms));
-async function doClaw() {
-  const k = GAME?.kuji; if (clawBusy || !k) return;
+function clawStart() {
+  const k = GAME?.kuji; if (!k || clawOn || clawBusy) return;
   if (k.nextCost && state.balance < k.nextCost) return toast("點數不夠，明天再來免費夾一次吧");
-  clawBusy = true;
-  const machine = $("#claw-machine"), claw = $("#claw"), btn = $("[data-claw]");
-  if (btn) btn.disabled = true;
-  // 夾子底下最近的娃娃（距離 6% 以內才算對準）
-  const target = clawDolls.map((p, i) => ({ d: p.d, i, y: p.y, gap: Math.abs(p.x - clawX) }))
-    .filter(p => p.gap <= 6).sort((a, b) => b.y - a.y || a.gap - b.gap)[0] ?? null;
+  clawOn = true; clawLeft = CLAW_TIME; clawX = CLAW_HOME; render();
+}
+function clawMove(dir) {
+  clearInterval(clawMoveT);
+  if (!clawOn || clawBusy) return;
+  clawMoveT = setInterval(() => {
+    clawX = Math.min(93, Math.max(CLAW_HOME, clawX + dir * 0.9));
+    const el = $("#claw"); if (el) el.style.left = clawX + "%";
+  }, 16);
+}
+const clawStop = () => clearInterval(clawMoveT);
+document.addEventListener("pointerdown", e => { const b = e.target.closest("[data-claw-move]"); if (b && !b.disabled) { e.preventDefault(); clawMove(Number(b.dataset.clawMove)); } });
+["pointerup", "pointercancel", "pointerleave", "blur"].forEach(ev => document.addEventListener(ev, clawStop));
+document.addEventListener("contextmenu", e => { if (e.target.closest("[data-claw-move]")) e.preventDefault(); });
+const wait = ms => new Promise(r => setTimeout(r, ms));
+// 夾到的扭蛋：放大到畫面中間、搖一搖、上下打開
+function openCapsule(color) {
+  return new Promise(done => {
+    const el = document.createElement("div"); el.className = "summon cap-open"; el.setAttribute("aria-hidden", "true");
+    el.innerHTML = `<div class="big-cap" style="--c:${color}"><i class="top"></i><i class="bot"></i></div><div class="flash"></div>`;
+    document.body.appendChild(el);
+    setTimeout(() => el.classList.add("open"), 900);
+    setTimeout(() => { el.remove(); done(); }, 1500);
+  });
+}
+async function doClaw() {
+  const k = GAME?.kuji; if (clawBusy || !clawOn || !k) return;
+  clawBusy = true; clawOn = false; clawStop(); clearInterval(clawTick); clawTick = 0;
+  const machine = $("#claw-machine"), claw = $("#claw");
+  machine?.querySelectorAll(".claw-ctrl button").forEach(b => b.disabled = true);
+  // 夾子正下方（6% 以內）疊在最上面的那一顆
+  const target = clawDolls.map((p, i) => ({ p, d: p.d, i, gap: Math.abs(p.x - clawX) }))
+    .filter(p => p.gap <= 6).sort((a, b) => b.p.y - a.p.y || a.gap - b.gap)[0] ?? null;
   const req = pointsCall({ action: "kuji_draw", target: target?.d.id ?? null }).catch(e => ({ error: e }));
   try {
-    machine.classList.add("drop"); await wait(750);           // 夾子下降
-    machine.classList.add("grab"); await wait(350);           // 夾起來
+    machine.classList.add("drop"); await wait(750);
+    machine.classList.add("grab"); await wait(350);
     const res = await req;
     if (res.error) throw res.error;
-    const dollEl = target && machine.querySelector(`.doll[data-i="${target.i}"]`);
-    if (res.caught && dollEl) { $(".claw-carry", claw).textContent = target.d.em; dollEl.style.visibility = "hidden"; }
-    else if (dollEl && res.aimed) { $(".claw-carry", claw).textContent = target.d.em; dollEl.style.visibility = "hidden"; }
+    const capEl = target && machine.querySelector(`.cap[data-i="${target.i}"]`);
+    const carry = $(".claw-carry", claw);
+    if (capEl && (res.caught || res.aimed)) { carry.innerHTML = capHTML(target.p.color, "mini"); capEl.style.visibility = "hidden"; }
     machine.classList.remove("drop"); machine.classList.add("rise");
-    if (!res.caught && res.aimed && dollEl) {                  // 夾到一半滑掉
-      await wait(420); $(".claw-carry", claw).textContent = ""; dollEl.style.visibility = ""; dollEl.classList.add("slip");
-      await wait(380);
+    if (!res.caught && res.aimed && capEl) {                  // 夾到一半滑掉
+      await wait(420); carry.innerHTML = ""; capEl.style.visibility = ""; capEl.classList.add("slip"); await wait(380);
     } else await wait(800);
-    if (res.caught) {                                         // 移到出口放開
-      claw.style.transition = "left .7s ease-in-out"; claw.style.left = "6%"; await wait(750);
-      machine.classList.remove("grab"); $(".claw-carry", claw).classList.add("fall"); await wait(500);
+    if (res.caught) {                                          // 移到出口放開
+      claw.style.transition = "left .8s ease-in-out"; claw.style.left = CLAW_HOME + "%"; await wait(850);
+      machine.classList.remove("grab"); carry.classList.add("fall"); await wait(500);
+    } else {
+      claw.style.transition = "left .6s ease-in-out"; claw.style.left = CLAW_HOME + "%"; await wait(650);
     }
-    machine.classList.remove("rise", "grab");
+    machine.classList.remove("rise", "grab"); carry.classList.remove("fall"); carry.innerHTML = "";
+    clawX = CLAW_HOME; claw.style.transition = "";
     if (!res.caught) toast(res.aimed ? `差一點！再 ${res.pityLeft} 次一定夾到` : `沒對準耶～再 ${res.pityLeft} 次一定夾到`);
-    clawBusy = false; claw.style.transition = "";
+    clawBusy = false;
+    if (res.caught) await openCapsule(target.p.color);
     await syncPoints();
     if (res.caught) revealKuji(res);
   } catch (e) {
-    clawBusy = false; machine?.classList.remove("drop", "grab", "rise");
+    clawBusy = false; clawX = CLAW_HOME; machine?.classList.remove("drop", "grab", "rise");
     toast(e.status === 409 ? "點數不夠，或這盒已經夾完了" : "連不上銀行，請稍後再試");
     await syncPoints();
   }
@@ -1740,7 +1789,7 @@ function intro() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-chart],[data-pick],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],[data-claw],[data-kuji-list],#logo,#logout,#house-edit,#card"); if (!t) return;
+  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-chart],[data-pick],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],[data-claw],[data-claw-start],[data-kuji-list],#logo,#logout,#house-edit,#card"); if (!t) return;
   if (t.id === "card") { if (!t.closest(".intro")) pickCardBg(); return; }
   if (t.dataset.range) { statRange = t.dataset.range; render(); return; }
   if (t.dataset.chart) { chartTab = t.dataset.chart; chartPick = null; render(); return; }
@@ -1756,6 +1805,7 @@ document.addEventListener("click", e => {
   else if (t.dataset.starter !== undefined) doStarter();
   else if (t.dataset.push !== undefined) enablePush();
   else if (t.dataset.buy) buyItem(t.dataset.buy);
+  else if (t.dataset.clawStart !== undefined) clawStart();
   else if (t.dataset.claw !== undefined) doClaw();
   else if (t.dataset.kujiList !== undefined) kujiList();
   else if (t.id === "logo") logoTap();
