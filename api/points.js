@@ -427,6 +427,14 @@ export default async function handler(req, res) {
       }
       return res.status(200).json({ result: { ...prize, cardId, logId }, lastOne, left: st.left - 1, total: st.total });
     }
+    // ===== 一番賞「自訂」：抽到後寫下想吃的，記在紀錄裡 =====
+    if (body.action === 'kuji_note') {
+      const text = String(body.text ?? '').trim().slice(0, 40);
+      const log = await notion(`pages/${String(body.logId ?? '').replace(/[^0-9a-f-]/gi, '')}`, 'GET').catch(() => null);
+      if (!text || !log || log.parent?.data_source_id?.replace(/-/g, '') !== KUJI_LOG_DS.replace(/-/g, '') || !txt(log.properties['獎品']).startsWith('自訂')) return fail(400, 'bad_request');
+      await notion(`pages/${log.id}`, 'PATCH', { properties: { '獎品': title(`自訂・${text}`) } });
+      return res.status(200).json({ ok: true });
+    }
     // ===== 一番賞：抽到的換成同一個等級的其他獎品（原本那張放回盒子）=====
     if (body.action === 'kuji_swap') {
       const st = await kujiState();
