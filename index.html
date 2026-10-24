@@ -1010,8 +1010,8 @@ document.addEventListener("pointerdown", e => {
       if (!clawOn || clawBusy) { joyT = 0; return; }
       const dt = Math.min(0.05, (now - last) / 1000); last = now;
       if (joyV.x || joyV.y) {
-        claw.x = Math.min(95, Math.max(5, claw.x + joyV.x * 55 * dt));     // 每秒最多橫移 55%
-        claw.d = Math.min(1, Math.max(0, claw.d - joyV.y * 0.85 * dt));    // 每秒最多前後 0.85
+        claw.x = Math.min(95, Math.max(5, claw.x + joyV.x * 70 * dt));     // 每秒最多橫移 70%
+        claw.d = Math.min(1, Math.max(0, claw.d - joyV.y * 1.1 * dt));     // 每秒最多前後 1.1
         placeClaw();
       }
       frame(tick);
@@ -1039,19 +1039,29 @@ async function doClaw() {
   const k = GAME?.kuji; if (clawBusy || !clawOn || !k) return;
   clawBusy = true; clawOn = false; clearInterval(clawTick); clawTick = 0; joyV = { x: 0, y: 0 };
   const machine = $("#claw-machine"), el = $("#claw"), btn = $("[data-claw]"), carry = $(".claw-carry", el);
-  const s = sc(claw.d);
-  // 夾子正下方疊在最上面的那一顆（左右 5%、前後 0.12 以內）
-  const under = clawDolls.map((p, i) => ({ p, i })).filter(({ p }) => Math.abs(p.x - claw.x) <= 5 && Math.abs(p.dep - claw.d) <= 0.12)
-    .sort((a, b) => a.p.top - b.p.top)[0] ?? null;
-  const goalY = under ? under.p.top + under.p.size * 0.55 : fy(claw.d) - 4;      // 夾子要伸到的高度（畫面 px）
+  // 找夾子附近的扭蛋：用畫面上的距離算（左右差不到一顆半、前後差不到 0.3），最近的那顆；
+  // 一樣近的話挑疊在上面的。下降時夾子會被吸到那顆正上方，所以看起來對到哪顆就夾哪顆
+  const W = machine.clientWidth || 360, cxPx = sx(claw.x, claw.d) / 100 * W;
+  const under = clawDolls.map((p, i) => {
+    const dx = (sx(p.x, p.dep) / 100 * W - cxPx) / p.size, dd = (p.dep - claw.d) / 0.3;
+    return { p, i, score: Math.hypot(dx / 1.5, dd) - p.layer * 0.15 };
+  }).filter(c => c.score <= 1).sort((a, b) => a.score - b.score)[0] ?? null;
+  const aim = under ? { x: under.p.x, d: under.p.dep } : { x: claw.x, d: claw.d }, from = { x: claw.x, d: claw.d };
+  const s = sc(aim.d);
+  const goalY = under ? under.p.top + under.p.size * 0.55 : fy(aim.d) - 4;      // 夾子要伸到的高度（畫面 px）
   const fullRope = Math.max(10, (goalY - M_RAIL) / s - HEAD_H);
   machine.classList.add("open");
   clawPhase = "drop"; clawEarly = false; if (btn) btn.textContent = "收";
-  // 下降：每秒約 150px，中途按「收」就停在當下的高度
-  const startRope = claw.rope, dropMs = Math.max(500, (fullRope - startRope) * s / 150 * 1000);
-  await tween(dropMs, t => { if (clawEarly) return; claw.rope = startRope + (fullRope - startRope) * t; placeClaw(); });
+  // 下降：每秒約 260px，前半段順便修正到扭蛋正上方；中途按「收」就停在當下的高度
+  const startRope = claw.rope, dropMs = Math.max(420, (fullRope - startRope) * s / 260 * 1000);
+  await tween(dropMs, t => {
+    if (clawEarly) return;
+    const e = Math.min(1, t / 0.45), k = 1 - (1 - e) ** 3;
+    claw.x = from.x + (aim.x - from.x) * k; claw.d = from.d + (aim.d - from.d) * k;
+    claw.rope = startRope + (fullRope - startRope) * t; placeClaw();
+  });
   clawPhase = ""; if (btn) { btn.textContent = "抓"; btn.disabled = true; }
-  const reached = M_RAIL + (claw.rope + HEAD_H) * s;
+  const reached = M_RAIL + (claw.rope + HEAD_H) * sc(claw.d);
   const target = under && reached >= under.p.top + under.p.size * 0.3 ? under : null;   // 提早收太高就夾不到
   const pity = GAME.kuji.pity || 5, rate = GAME.kuji.rate ?? 30;
   const req = clawPractice
@@ -1065,7 +1075,7 @@ async function doClaw() {
     const capEl = target && machine.querySelector(`.cap[data-i="${target.i}"]`);
     if (capEl && (res.caught || res.aimed)) { carry.innerHTML = capHTML(target.p.color, target.p.size / s); capEl.style.visibility = "hidden"; }
     // 往上拉；沒夾穩的話拉到一半掉下去（差點讓妳得逞）
-    const liftFrom = claw.rope, liftMs = Math.max(600, (liftFrom - 10) * s / 140 * 1000);
+    const liftFrom = claw.rope, liftMs = Math.max(500, (liftFrom - 10) * s / 220 * 1000);
     let slipped = false;
     await tween(liftMs, t => {
       claw.rope = liftFrom - (liftFrom - 10) * t; placeClaw();
