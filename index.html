@@ -235,6 +235,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 @keyframes cap-shake { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-12deg); } 40% { transform: rotate(10deg); } 60% { transform: rotate(-8deg); } 80% { transform: rotate(5deg); } }
 .claw-sold { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--gold); background: rgba(0,0,0,.55); z-index: 500; }
 .claw-go { width: 100%; }
+.claw-start { display: grid; grid-template-columns: 1fr 2fr; gap: 8px; }
+.practice-tag { align-self: center; padding: 3px 10px; border-radius: 99px; font-size: 12px; color: #9fd0a8; border: 1px solid rgba(159,208,168,.4); background: rgba(159,208,168,.08); }
 .kuji-bar { height: 6px; border-radius: 99px; background: var(--ink); overflow: hidden; }
 .kuji-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--gold), #ff9f5a); }
 .hcard.r-keep { box-shadow: 0 0 16px rgba(243,166,196,.45); border-color: var(--rc); }
@@ -897,6 +899,7 @@ const sc = d => 1 - 0.4 * d;                            // 越裡面越小
 const sx = (x, d) => 50 + (x - 50) * (1 - 0.24 * d);    // 透視後的水平位置（%）
 const CAP_COLORS = ["#f28b9b", "#f5c26b", "#8fc9a3", "#7fb2e6", "#c39be0", "#f0a35e", "#6fd1c9", "#ef7f7f"];
 let clawDolls = [], clawPileKey = "", clawBusy = false, clawOn = false, clawTick = 0, clawLeft = 0, clawPhase = "";
+let clawPractice = false, practiceMiss = 0;   // 練習模式：不連銀行、不扣點、不算次數，機率跟保夾跟正式一樣
 let claw = { ...CLAW_HOME, rope: 10 }, joyV = { x: 0, y: 0 }, joyT = 0, clawEarly = false;
 function pickDolls(k) {
   // 從還有剩的菜色裡隨機抓（剩越多越容易出現），包成扭蛋擠成一坨堆三層；顏色隨機，跟等級無關
@@ -934,7 +937,7 @@ function kujiSection() {
     ? `<div class="claw-ctrl"><div class="joy" id="joy" aria-label="搖桿"><span class="knob"></span></div>
         <span class="claw-time">剩餘 <b id="claw-time">${clawLeft}</b> 秒</span>
         <button class="grab-btn" data-claw>${clawPhase === "drop" ? "收" : "抓"}</button></div>`
-    : `<button class="btn pri claw-go" data-claw-start>${k.nextCost ? `開始・${fmt(k.nextCost)} pts` : "開始・今天免費 🎁"}</button>`;
+    : `<div class="claw-start"><button class="btn ghost" data-claw-start="practice">🎮 練習</button><button class="btn pri" data-claw-start>${k.nextCost ? `開始・${fmt(k.nextCost)} pts` : "開始・今天免費 🎁"}</button></div>`;
   return `<section class="sec kuji">
     <div class="sec-head"><h2>🕹️ 晚上吃什麼夾娃娃</h2><span class="label">第 ${k.box} 盒・剩 ${k.left} / ${k.total}</span></div>
     <button class="kuji-board" data-kuji-list>${tiers.map(x => `<span class="kt ${x.left ? "" : "out"}"><b>${x.t}</b><small>${x.left}/${x.total}</small></span>`).join("")}
@@ -952,6 +955,7 @@ function kujiSection() {
       ${sold ? `<div class="claw-sold">這一盒夾完了 🎉<br><small>等待開新盒</small></div>` : ""}
     </div>
     ${ctrl}
+    ${clawPractice && playing ? `<span class="practice-tag">練習模式・不算數</span>` : ""}
     <span class="fresh">${playing ? "用搖桿前後左右移動夾子，按「抓」放下去；下降中再按一次＝提早收" : `按開始後用搖桿移動夾子・再 ${k.pityLeft} 次一定夾到・每天第一次免費`}</span>
   </section>`;
 }
@@ -972,10 +976,10 @@ function startClaw() {
     if (clawLeft <= 0) clawPress();
   }, 1000);
 }
-function clawStart() {
+function clawStart(practice = false) {
   const k = GAME?.kuji; if (!k || clawOn || clawBusy) return;
-  if (k.nextCost && state.balance < k.nextCost) return toast("點數不夠，明天再來免費夾一次吧");
-  clawOn = true; clawLeft = CLAW_TIME; clawPhase = ""; claw = { ...CLAW_HOME, rope: 10 }; render();
+  if (!practice && k.nextCost && state.balance < k.nextCost) return toast("點數不夠，先用練習模式玩玩看，明天再來免費夾一次吧");
+  clawPractice = practice; clawOn = true; clawLeft = CLAW_TIME; clawPhase = ""; claw = { ...CLAW_HOME, rope: 10 }; render();
 }
 // 搖桿：拖曳白色圓鈕，往上推＝往裡面、往下拉＝往外面
 document.addEventListener("pointerdown", e => {
@@ -1033,7 +1037,11 @@ async function doClaw() {
   clawPhase = ""; if (btn) { btn.textContent = "抓"; btn.disabled = true; }
   const reached = M_RAIL + (claw.rope + HEAD_H) * s;
   const target = under && reached >= under.p.top + under.p.size * 0.3 ? under : null;   // 提早收太高就夾不到
-  const req = pointsCall({ action: "kuji_draw", target: target?.p.d.id ?? null }).catch(e => ({ error: e }));
+  const pity = GAME.kuji.pity || 5, rate = GAME.kuji.rate ?? 30;
+  const req = clawPractice
+    ? Promise.resolve((() => { const caught = !!target && (practiceMiss + 1 >= pity || Math.random() * 100 < rate); practiceMiss = caught ? 0 : practiceMiss + 1;
+        return { caught, aimed: !!target, pityLeft: Math.max(1, pity - practiceMiss), result: target ? { ...target.p.d } : null }; })())
+    : pointsCall({ action: "kuji_draw", target: target?.p.d.id ?? null }).catch(e => ({ error: e }));
   machine.classList.remove("open"); machine.classList.add("grab"); await wait(380);
   try {
     const res = await req;
@@ -1054,6 +1062,10 @@ async function doClaw() {
     machine.classList.remove("grab", "open"); carry.classList.remove("fall"); carry.innerHTML = "";
     if (!res.caught) toast(res.aimed ? `差點讓妳得逞！再 ${res.pityLeft} 次一定夾到` : `沒對準耶～再 ${res.pityLeft} 次一定夾到`);
     clawBusy = false;
+    if (clawPractice) {                                      // 練習：扭蛋放回機台，不打開、不記錄
+      if (res.caught) toast(`練習夾到了！（${res.result.tier}・不算數）`);
+      clawPractice = false; clawPileKey = ""; render(); return;
+    }
     if (res.caught) await openCapsule(target.p.color);
     await syncPoints();
     if (res.caught) revealKuji(res);
@@ -1882,7 +1894,7 @@ document.addEventListener("click", e => {
   else if (t.dataset.starter !== undefined) doStarter();
   else if (t.dataset.push !== undefined) enablePush();
   else if (t.dataset.buy) buyItem(t.dataset.buy);
-  else if (t.dataset.clawStart !== undefined) clawStart();
+  else if (t.dataset.clawStart !== undefined) clawStart(t.dataset.clawStart === "practice");
   else if (t.dataset.claw !== undefined) clawPress();
   else if (t.dataset.kujiList !== undefined) kujiList();
   else if (t.id === "logo") logoTap();
