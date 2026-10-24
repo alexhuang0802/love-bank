@@ -83,6 +83,7 @@ async function loadConfig() {
       kujiPrice: (v => v !== '' && v != null && Number.isFinite(Number(v)) ? Number(v) : DEFAULT_KUJI_PRICE)(rows.find(r => r.type === '一番賞' && r.name.includes('點數'))?.value),
       clawRate: Number(rows.find(r => r.type === '一番賞' && r.name.includes('機率'))?.value) || 30,
       clawPity: Math.max(1, Math.round(Number(rows.find(r => r.type === '一番賞' && r.name.includes('保夾'))?.value) || 5)),
+      clawBonusRow: rows.find(r => r.type === '一番賞' && r.name.includes('加送')) ?? null,   // 加送的免費次數，用一次少一次
       kujiBoxRow: rows.find(r => r.type === '一番賞' && r.name.includes('盒號')) ?? null };
   } catch { CFG = { odds: DEFAULT_ODDS, starterOdds: DEFAULT_STARTER_ODDS, lines: null, blankEvery: DEFAULT_BLANK_EVERY }; }
 }
@@ -209,7 +210,8 @@ async function kujiState() {
     .sort((a, b) => a.tier.localeCompare(b.tier));
   const last = all.find(p => p.tier === 'LAST ONE') ?? null;
   const pity = CFG.clawPity ?? 5, price = CFG.kujiPrice ?? DEFAULT_KUJI_PRICE;
-  return { box, price, nextCost: todayTries >= 1 ? price : 0, todayTries, missStreak, pity, pityLeft: Math.max(1, pity - missStreak), rate: CFG.clawRate ?? 30,
+  const bonus = Math.max(0, Math.round(Number(CFG.clawBonusRow?.value) || 0));
+  return { box, price, bonus, nextCost: todayTries >= 1 && !bonus ? price : 0, todayTries, missStreak, pity, pityLeft: Math.max(1, pity - missStreak), rate: CFG.clawRate ?? 30,
     items, last, lastTaken: !!(last && drawn[last.id]),
     total: items.reduce((s, p) => s + p.count, 0), left: items.reduce((s, p) => s + p.left, 0) };
 }
@@ -419,6 +421,7 @@ export default async function handler(req, res) {
       if (st.left <= 0) return fail(409, 'sold_out');
       // 夾娃娃：夾子停在哪個獎品上面就夾那個；夾中機率 30%，連續沒夾到到保夾次數就一定夾到
       const cost = st.nextCost;
+      if (st.todayTries >= 1 && st.bonus > 0) await notion(`pages/${CFG.clawBonusRow.id}`, 'PATCH', { properties: { '值': rt(String(st.bonus - 1)) } });
       if (cost > 0 && balanceOf(rows) < cost) return fail(409, 'insufficient');
       const target = st.items.find(p => p.id === body.target && p.left > 0) ?? null;
       const pityHit = st.missStreak + 1 >= st.pity;
