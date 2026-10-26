@@ -203,6 +203,9 @@ async function kujiState() {
   const todayTries = tries.filter(l => new Date(Date.parse(l.created_time) + 8 * 3600e3).toISOString().slice(0, 10) === today).length;
   let missStreak = 0;
   for (const l of tries) { if (txt(l.properties['抽法']) === '沒夾到') missStreak++; else break; }
+  // 夾到的紀錄（新到舊，最多 50 筆）：自訂的會是「自訂・她寫的內容」
+  const history = allLogs.filter(l => txt(l.properties['抽法']) !== '沒夾到' && txt(l.properties['獎品ID'])).slice(0, 50)
+    .map(l => ({ name: txt(l.properties['獎品']), tier: txt(l.properties['等級']), at: l.created_time, box: l.properties['盒號']?.number ?? null, how: txt(l.properties['抽法']) }));
   const all = prizes.filter(p => p.properties['上架']?.checkbox && txt(p.properties['獎品']))
     .map(({ id, properties: p }) => ({ id, name: txt(p['獎品']), tier: p['等級']?.select?.name ?? 'F賞', count: Math.max(0, Math.round(p['數量']?.number ?? 0)),
       em: txt(p['圖示']) || '🎁', desc: txt(p['說明']) }));
@@ -212,7 +215,7 @@ async function kujiState() {
   const pity = CFG.clawPity ?? 5, price = CFG.kujiPrice ?? DEFAULT_KUJI_PRICE;
   const bonus = Math.max(0, Math.round(Number(CFG.clawBonusRow?.value) || 0));
   return { box, price, bonus, nextCost: todayTries >= 1 && !bonus ? price : 0, todayTries, missStreak, pity, pityLeft: Math.max(1, pity - missStreak), rate: CFG.clawRate ?? 30,
-    items, last, lastTaken: !!(last && drawn[last.id]),
+    history, items, last, lastTaken: !!(last && drawn[last.id]),
     total: items.reduce((s, p) => s + p.count, 0), left: items.reduce((s, p) => s + p.left, 0) };
 }
 const logKuji = (p, box, how) => notion('pages', 'POST', { parent: { type: 'data_source_id', data_source_id: KUJI_LOG_DS },

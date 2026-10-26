@@ -169,6 +169,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .hcard.r-ssr { box-shadow: 0 0 14px rgba(226,194,122,.35); } .hcard.r-wild { box-shadow: 0 0 14px rgba(229,143,180,.35); }
 .hcard.r-kuji { box-shadow: 0 0 14px rgba(255,159,90,.4); border-color: var(--rc); }
 .kuji { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; gap: 12px; }
+.kuji-hist { justify-self: start; }
 .kuji-board { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; width: 100%; padding: 0; }
 .kt { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px; border-radius: 10px; background: var(--ink); border: 1px solid var(--line); }
 .kt b { font-size: 13px; color: var(--gold); font-weight: 600; } .kt small { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -942,6 +943,7 @@ function kujiSection() {
     : `<div class="claw-start"><button class="btn ghost" data-claw-start="practice">🎮 練習</button><button class="btn pri" data-claw-start>${k.nextCost ? `開始・${fmt(k.nextCost)} pts` : k.todayTries >= 1 && k.bonus ? `開始・加送免費（剩 ${k.bonus}）🎁` : "開始・今天免費 🎁"}</button></div>`;
   return `<section class="sec kuji">
     <div class="sec-head"><h2>🕹️ 晚上吃什麼夾娃娃</h2><span class="label">第 ${k.box} 盒・剩 ${k.left} / ${k.total}</span></div>
+    <button class="pill kuji-hist" data-kuji-hist>📜 夾到的紀錄${k.history?.length ? `（${k.history.length}）` : ""}</button>
     <button class="kuji-board" data-kuji-list>${tiers.map(x => `<span class="kt ${x.left ? "" : "out"}"><b>${x.t}</b><small>${x.left}/${x.total}</small></span>`).join("")}
       ${k.last ? `<span class="kt last ${k.lastTaken ? "out" : ""}"><b>LAST</b><small>${esc(k.last.em)}</small></span>` : ""}</button>
     <div class="claw-machine ${playing ? "on" : ""}" id="claw-machine">
@@ -1138,6 +1140,15 @@ function revealKuji({ result, lastOne, left, total, pity }) {
   else show(result, label, after);
 }
 
+// 夾到的紀錄：哪天夾到什麼（自訂的會顯示她寫的內容）
+function kujiHistory() {
+  const h = GAME?.kuji?.history || [];
+  const emOf = x => (GAME.kuji.items.find(i => x.name === i.name || x.name.startsWith(i.name + "・")) || (GAME.kuji.last?.name === x.name ? GAME.kuji.last : null))?.em || "🎁";
+  sheet(`<h3>📜 夾到的紀錄</h3><div class="list">${h.length ? h.map(x => `
+    <div class="row"><div class="meta"><b>${esc(emOf(x))} ${esc(x.name.replace(/^自訂・/, "✏️ "))}</b><span>${dt(x.at)}・${esc(x.tier || "")}${x.how === "保夾" ? "・保夾" : ""}${x.how === "LAST ONE" ? "・LAST ONE 👑" : ""}</span></div></div>`).join("")
+    : `<div class="empty">還沒有夾到東西，去試試手氣吧 🕹️</div>`}</div>
+    <button class="btn ghost" data-close>關閉</button>`);
+}
 function kujiList() {
   const k = GAME?.kuji; if (!k) return;
   sheet(`<h3>🍽️ 第 ${k.box} 盒菜單</h3><div class="list">${k.items.map(x => `
@@ -1904,7 +1915,7 @@ function intro() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-chart],[data-pick],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],[data-claw],[data-claw-start],[data-kuji-list],#logo,#logout,#house-edit,#card"); if (!t) return;
+  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-chart],[data-pick],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],[data-claw],[data-claw-start],[data-kuji-list],[data-kuji-hist],#logo,#logout,#house-edit,#card"); if (!t) return;
   if (t.id === "card") { if (!t.closest(".intro")) pickCardBg(); return; }
   if (t.dataset.range) { statRange = t.dataset.range; render(); return; }
   if (t.dataset.chart) { chartTab = t.dataset.chart; chartPick = null; render(); return; }
@@ -1923,6 +1934,7 @@ document.addEventListener("click", e => {
   else if (t.dataset.clawStart !== undefined) clawStart(t.dataset.clawStart === "practice");
   else if (t.dataset.claw !== undefined) clawPress();
   else if (t.dataset.kujiList !== undefined) kujiList();
+  else if (t.dataset.kujiHist !== undefined) kujiHistory();
   else if (t.id === "logo") logoTap();
 });
 
