@@ -205,7 +205,7 @@ async function kujiState() {
   for (const l of tries) { if (txt(l.properties['抽法']) === '沒夾到') missStreak++; else break; }
   // 夾到的紀錄（新到舊，最多 50 筆）：自訂的會是「自訂・她寫的內容」
   const history = allLogs.filter(l => txt(l.properties['抽法']) !== '沒夾到' && txt(l.properties['獎品ID'])).slice(0, 50)
-    .map(l => ({ name: txt(l.properties['獎品']), tier: txt(l.properties['等級']), at: l.created_time, box: l.properties['盒號']?.number ?? null, how: txt(l.properties['抽法']) }));
+    .map(l => ({ name: txt(l.properties['獎品']), tier: txt(l.properties['等級']), at: l.created_time, box: l.properties['盒號']?.number ?? null, how: txt(l.properties['抽法']), used: !!l.properties['已兌換']?.checkbox }));
   const all = prizes.filter(p => p.properties['上架']?.checkbox && txt(p.properties['獎品']))
     .map(({ id, properties: p }) => ({ id, name: txt(p['獎品']), tier: p['等級']?.select?.name ?? 'F賞', count: Math.max(0, Math.round(p['數量']?.number ?? 0)),
       em: txt(p['圖示']) || '🎁', desc: txt(p['說明']) }));

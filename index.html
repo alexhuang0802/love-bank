@@ -170,6 +170,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .hcard.r-kuji { box-shadow: 0 0 14px rgba(255,159,90,.4); border-color: var(--rc); }
 .kuji { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; gap: 12px; }
 .kuji-hist { justify-self: start; }
+.row.used .meta b { color: var(--muted); }
+.tag.done { color: var(--muted); border-color: var(--line); } .tag.todo { color: #ff9f5a; border-color: rgba(255,159,90,.5); }
 .kuji-board { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; width: 100%; padding: 0; }
 .kt { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px; border-radius: 10px; background: var(--ink); border: 1px solid var(--line); }
 .kt b { font-size: 13px; color: var(--gold); font-weight: 600; } .kt small { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -1145,7 +1147,7 @@ function kujiHistory() {
   const h = GAME?.kuji?.history || [];
   const emOf = x => (GAME.kuji.items.find(i => x.name === i.name || x.name.startsWith(i.name + "・")) || (GAME.kuji.last?.name === x.name ? GAME.kuji.last : null))?.em || "🎁";
   sheet(`<h3>📜 夾到的紀錄</h3><div class="list">${h.length ? h.map(x => `
-    <div class="row"><div class="meta"><b>${esc(emOf(x))} ${esc(x.name.replace(/^自訂・/, "✏️ "))}</b><span>${dt(x.at)}・${esc(x.tier || "")}${x.how === "保夾" ? "・保夾" : ""}${x.how === "LAST ONE" ? "・LAST ONE 👑" : ""}</span></div></div>`).join("")
+    <div class="row ${x.used ? "used" : ""}"><div class="meta"><b>${esc(emOf(x))} ${esc(x.name.replace(/^自訂・/, "✏️ "))}</b><span>${dt(x.at)}・${esc(x.tier || "")}${x.how === "保夾" ? "・保夾" : ""}${x.how === "LAST ONE" ? "・LAST ONE 👑" : ""}</span></div><span class="tag ${x.used ? "done" : "todo"}">${x.used ? "已兌換" : "未兌換"}</span></div>`).join("")
     : `<div class="empty">還沒有夾到東西，去試試手氣吧 🕹️</div>`}</div>
     <button class="btn ghost" data-close>關閉</button>`);
 }
