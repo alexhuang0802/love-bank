@@ -182,7 +182,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .pt-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1.2fr; gap: 6px; padding: 8px 10px; font-size: 13px; font-variant-numeric: tabular-nums; border-top: 1px solid var(--line); }
 .pt-row span:not(:first-child) { text-align: right; } .pt-row small { margin-left: 4px; font-size: 10px; color: var(--muted); }
 .pt-head { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-size: 12px; border-top: 0; }
-.pt-row.now { background: rgba(201,177,126,.1); } .pt-row.move { background: rgba(159,208,168,.08); }
+.pt-row.now { background: rgba(201,177,126,.1); } .pt-row .now-bal { color: var(--gold); } .pt-row.move { background: rgba(159,208,168,.08); }
 .pt-row .plus { color: var(--plus); } .pt-row .minus { color: var(--minus); } .pt-row .dim { color: var(--muted); }
 .row.used .meta b { color: var(--muted); }
 .tag.done { color: var(--muted); border-color: var(--line); } .tag.todo { color: #ff9f5a; border-color: rgba(255,159,90,.5); }
@@ -1242,6 +1242,8 @@ function planSection() {
   let streak = 0; for (let i = past.length - 1; i >= 0 && past[i].net >= past[i].goal; i--) streak++;
   const moveIn = plan.filter(r => !r.term && r.house <= -1000000).at(-1);       // 交屋那個月（最後一筆大筆購屋支出）
   const monthsLeft = moveIn ? (Number(moveIn.ym.slice(0, 4)) - Number(cur.slice(0, 4))) * 12 + Number(moveIn.ym.slice(5)) - Number(cur.slice(5)) : null;
+  const now = FUND.total ?? 0, proj = {};
+  { let b = now; for (const r of plan) if (r.ym > cur) { b += r.net; proj[r.ym] = b; } proj[cur] = now; }
   const end = ymOf(new Date(Date.UTC(Number(cur.slice(0, 4)), Number(cur.slice(5)) - 1 + 12, 1)));   // 往後看 12 個月
   const rows = planAll ? plan : plan.filter(r => r.ym >= monthKeys(cur, 4)[0] && r.ym <= end);   // 預設：前 3 個月～後 12 個月
   return `<section class="sec level-card">
@@ -1257,20 +1259,20 @@ function planSection() {
   <section class="sec">
     <div class="sec-head"><h2>📈 AI 逐月現金流</h2>${moveIn ? `<span class="label">交屋 ${ymLabel(moveIn.ym)}${monthsLeft > 0 ? `・還有 ${monthsLeft} 個月` : ""}</span>` : ""}</div>
     ${moveIn ? `<div class="sum3">
-      <div><span class="label">交屋後餘額</span><span class="amt">${fmt(moveIn.bal)}</span><span class="fresh">計畫</span></div>
-      <div><span class="label">本月計畫存</span><span class="amt">${fmt(plan.find(r => r.ym === cur)?.net ?? 0)}</span><span class="fresh">淨現金流</span></div>
+      <div><span class="label">交屋後餘額</span><span class="amt">${fmt(Math.round(proj[moveIn.ym] ?? now))}</span><span class="fresh">用目前資產預估</span></div>
+      <div><span class="label">本月目標</span><span class="amt">${fmt(goal)}</span><span class="fresh">收入－支出</span></div>
       <div><span class="label">本月實際</span><span class="amt ${net >= 0 ? "plus" : "minus"}">${fmt(Math.round(net))}</span><span class="fresh">基金收支</span></div></div>` : ""}
     <div class="plan-table" role="table">
-      <div class="pt-row pt-head" role="row"><span>月份</span><span>計畫淨額</span><span>實際</span><span>計畫餘額</span></div>
+      <div class="pt-row pt-head" role="row"><span>月份</span><span>計畫淨額</span><span>實際</span><span>預估餘額</span></div>
       ${rows.map(r => { const a = r.ym <= cur ? actualNet(bm, r.ym) : null, big = r.house <= -100000;
         return `<div class="pt-row ${r.ym === cur ? "now" : ""} ${r === moveIn ? "move" : ""}" role="row">
           <span>${ymLabel(r.ym)}${r === moveIn ? " 🏠" : big ? " 🧱" : r.term ? `<small>房貸${r.term}</small>` : ""}</span>
           <span class="${r.net < 0 ? "minus" : ""}">${fmt(r.net)}</span>
           <span class="${a == null ? "dim" : a >= r.net ? "plus" : "minus"}">${a == null ? "—" : fmt(Math.round(a))}</span>
-          <span>${fmt(r.bal)}</span></div>`; }).join("")}
+          <span class="${r.ym === cur ? "now-bal" : ""}">${proj[r.ym] == null ? "—" : fmt(Math.round(proj[r.ym]))}</span></div>`; }).join("")}
     </div>
     <button class="btn ghost" data-plan-all>${planAll ? "只看近期" : `看全部 ${plan.length} 個月`}</button>
-    <span class="fresh">🧱 = 頭期款／工程款・🏠 = 交屋・實際是基金當月收入－支出（投資不算支出）；改計畫到 Notion「📈 購屋現金流計畫」</span>
+    <span class="fresh">預估餘額：本月是基金目前總資產（現金＋股票 ${fmt(Math.round(now))}），之後每月加上計畫淨額・🧱 = 頭期款／工程款・🏠 = 交屋・改計畫到 Notion「📈 購屋現金流計畫」</span>
   </section>`;
 }
 
