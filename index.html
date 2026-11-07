@@ -1242,7 +1242,6 @@ function payNote(r, moveIn) {
   const parts = [];
   if (r.house < 0) parts.push(`<span class="minus">${moveIn ? "🏠 交屋款" : r.term ? `🏦 房貸第 ${r.term} 期` : "🧱 購屋款"} −${fmt(-r.house)}</span>`);
   if (r.other > 0) parts.push(`<span class="plus">💰 其他收入 +${fmt(r.other)}</span>`);
-  if (r.bonus > 0) parts.push(`<span class="plus">🎁 獎金 +${fmt(r.bonus)}</span>`);
   return parts.length ? `<div class="pt-note">${parts.join("")}</div>` : "";
 }
 function planSection() {
