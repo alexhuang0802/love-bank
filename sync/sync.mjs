@@ -10,6 +10,7 @@ const DS = {
   stocks:  "32b8718e-66c1-8038-8ebb-000beee610f8",
   perks:   "64325c42-b28e-4247-89c9-542c33350347", // 🎁 權益清單
   anniv:   "7edd66d2-8aa9-4d39-b81f-638339995a49", // 💞 紀念日
+  plan:    "58ba7549-da5a-461f-9792-f9c542ffd3d9", // 📈 購屋現金流計畫（AI 逐月現金流）
 };
 const TEMPLATE_ROWS = new Set(["Acme Inc. Salary", "Emca Inc. Salary", "Dividents"]);
 const OUT = new URL("../data.enc.json", import.meta.url);
@@ -92,6 +93,13 @@ const month = { label: ym.replace("-", "/"), income: sum(inMonth(income)), expen
 
 // 愛情小屋：支出裡「房貸」分類的累計與本月（台灣時間）
 const thisYm = `${tw.getUTCFullYear()}-${String(tw.getUTCMonth() + 1).padStart(2, "0")}`;
+// 購屋現金流計畫：每月一列（月份 2026/10），網銀拿來跟實際收支比對、做每月存錢卡關
+const plan = (await queryAll(DS.plan)).map(({ properties: p }) => {
+  const [y, m] = text(p["月份"]).split("/").map(Number);
+  return { ym: `${y}-${String(m).padStart(2, "0")}`, term: num(p["期數"]), salary: num(p["月薪"]) ?? 0, bonus: num(p["獎金"]) ?? 0,
+    living: num(p["生活費"]) ?? 0, house: num(p["購屋支出"]) ?? 0, other: num(p["其他收入"]) ?? 0, net: num(p["淨現金流"]) ?? 0, bal: num(p["現金餘額"]) ?? 0 };
+}).filter(r => /^\d{4}-\d{2}$/.test(r.ym)).sort((a, b) => a.ym.localeCompare(b.ym));
+
 const mortgageRows = expense.filter(t => t.tag === "房貸");
 const mortgage = {
   paid: -sum(mortgageRows),
@@ -212,11 +220,11 @@ const txns = recent.map(({ id, ...t }) => t);
 const data = {
   updatedAt: new Date().toISOString(), fundName: "❤️❤️基金",
   cash, month, stocks, stockValue, total: cash.balance + stockValue, txns,
-  stats: { byMonth }, imageIndex, photos, cardImg, cardImgs, perks, mortgage, anniversaries,
+  stats: { byMonth }, imageIndex, photos, cardImg, cardImgs, perks, mortgage, anniversaries, plan,
 };
 
 const { iv, ct } = await encrypt(new TextEncoder().encode(JSON.stringify(data)));
 await writeFile(OUT, JSON.stringify({ v: 1, iter: 250000, salt: b64(salt), iv: b64(iv), ct: b64(ct) }) + "\n");
 
 // repo 是公開的，執行紀錄任何人都看得到：只印筆數，絕不印金額
-console.log(`同步完成：${income.length + expense.length} 筆收支、${stocks.length} 檔股票、${imgCount} 張圖片${sharp ? "" : "（未壓縮）"}`);
+console.log(`同步完成：${income.length + expense.length} 筆收支、${plan.length} 個月計畫、${stocks.length} 檔股票、${imgCount} 張圖片${sharp ? "" : "（未壓縮）"}`);

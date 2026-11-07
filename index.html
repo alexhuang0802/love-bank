@@ -170,6 +170,20 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .hcard.r-kuji { box-shadow: 0 0 14px rgba(255,159,90,.4); border-color: var(--rc); }
 .kuji { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; gap: 12px; }
 .kuji-hist { justify-self: start; }
+.level-card { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 14px; gap: 10px; }
+.level-main { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.level-main .big small { font-size: 13px; color: var(--muted); margin-left: 6px; } .level-main .big.neg { color: var(--minus); }
+.level-badge { padding: 3px 10px; border-radius: 99px; font-size: 13px; border: 1px solid var(--line); color: var(--gold); }
+.level-badge.ok { color: var(--plus); border-color: rgba(159,208,168,.5); background: rgba(159,208,168,.08); }
+.level-hist { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
+.lv { display: flex; flex-direction: column; align-items: center; padding: 6px 0; border-radius: 10px; background: var(--ink); border: 1px solid var(--line); font-size: 13px; }
+.lv b { font-size: 11px; color: var(--muted); font-weight: 500; } .lv.no { opacity: .7; }
+.plan-table { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; max-height: 420px; overflow-y: auto; }
+.pt-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1.2fr; gap: 6px; padding: 8px 10px; font-size: 13px; font-variant-numeric: tabular-nums; border-top: 1px solid var(--line); }
+.pt-row span:not(:first-child) { text-align: right; } .pt-row small { margin-left: 4px; font-size: 10px; color: var(--muted); }
+.pt-head { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-size: 12px; border-top: 0; }
+.pt-row.now { background: rgba(201,177,126,.1); } .pt-row.move { background: rgba(159,208,168,.08); }
+.pt-row .plus { color: var(--plus); } .pt-row .minus { color: var(--minus); } .pt-row .dim { color: var(--muted); }
 .row.used .meta b { color: var(--muted); }
 .tag.done { color: var(--muted); border-color: var(--line); } .tag.todo { color: #ff9f5a; border-color: rgba(255,159,90,.5); }
 .kuji-board { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; width: 100%; padding: 0; }
@@ -1209,6 +1223,57 @@ function houseSvg(pct) {
     <path d="M60 86 C47 76 44 68 50 62 C54 58 58 60 60 63 C62 60 66 58 70 62 C76 68 73 76 60 86 Z" fill="var(--gold)"/>
   </svg>`;
 }
+/* ===== 購屋存錢計畫：每月卡關（基金收入－支出要過門檻）＋ AI 逐月現金流（計畫 vs 實際）===== */
+const goalOf = ym => ym < "2027-06" ? 90000 : ym < "2028-06" ? 95000 : 100000;   // 2027/6 起 9.5 萬、2028/6 起 10 萬
+const ymOf = d => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+const ymLabel = k => `${k.slice(0, 4)}/${Number(k.slice(5))}`;
+let planAll = false;
+function actualNet(bm, k) {   // 跟收支分析同一套：收入扣開帳，支出不算投資（投資算存下來的錢）
+  const r = bm?.[k]; if (!r) return null;
+  return sumObj(r.income) - (r.opening ?? 0) - (sumObj(r.expense) - (r.expense?.[SKIP_EXPENSE_TAG] ?? 0));
+}
+function planSection() {
+  const plan = FUND?.plan, bm = FUND?.stats?.byMonth;
+  if (!plan?.length || !bm) return "";
+  const cur = ymOf(new Date(Date.now() + 8 * 3600e3));
+  const goal = goalOf(cur), net = actualNet(bm, cur) ?? 0, ok = net >= goal;
+  // 過去幾個月的關卡紀錄（有記帳的月份，最多 12 個月）
+  const past = monthKeys(cur, 13).slice(0, 12).filter(k => bm[k]).map(k => ({ k, net: actualNet(bm, k), goal: goalOf(k) }));
+  let streak = 0; for (let i = past.length - 1; i >= 0 && past[i].net >= past[i].goal; i--) streak++;
+  const moveIn = plan.filter(r => !r.term && r.house <= -1000000).at(-1);       // 交屋那個月（最後一筆大筆購屋支出）
+  const monthsLeft = moveIn ? (Number(moveIn.ym.slice(0, 4)) - Number(cur.slice(0, 4))) * 12 + Number(moveIn.ym.slice(5)) - Number(cur.slice(5)) : null;
+  const end = ymOf(new Date(Date.UTC(Number(cur.slice(0, 4)), Number(cur.slice(5)) - 1 + 12, 1)));   // 往後看 12 個月
+  const rows = planAll ? plan : plan.filter(r => r.ym >= monthKeys(cur, 4)[0] && r.ym <= end);   // 預設：前 3 個月～後 12 個月
+  return `<section class="sec level-card">
+    <div class="sec-head"><h2>🏁 本月存錢關卡</h2><span class="label">${ymLabel(cur)}</span></div>
+    <div class="level-main"><span class="level-badge ${ok ? "ok" : ""}">${ok ? "過關 ✅" : "挑戰中"}</span>
+      <span class="big ${net >= 0 ? "" : "neg"}">${net < 0 ? "−" : ""}${fmt(Math.abs(Math.round(net)))}<small>/ ${fmt(goal)}</small></span></div>
+    <div class="bar ${ok ? "in" : "gold"}"><i style="width:${Math.max(0, Math.min(100, net / goal * 100))}%"></i></div>
+    <span class="fresh">${ok ? `這個月已經存超過目標 ${fmt(Math.round(net - goal))}` : `還差 ${fmt(Math.round(goal - net))} 就過關`}・基金收入－支出（投資不算支出）</span>
+    ${past.length ? `<div class="level-hist">${past.map(p => `<span class="lv ${p.net >= p.goal ? "ok" : "no"}" title="${ymLabel(p.k)} ${fmt(Math.round(p.net))}"><b>${Number(p.k.slice(5))}月</b>${p.net >= p.goal ? "✅" : "❌"}</span>`).join("")}</div>
+      <span class="fresh">${streak ? `連續過關 ${streak} 個月 🔥` : "上個月沒過關，這個月加油"}</span>` : ""}
+    <span class="fresh">門檻：2027/5 前 9 萬・2027/6 起 9.5 萬・2028/6 起 10 萬</span>
+  </section>
+  <section class="sec">
+    <div class="sec-head"><h2>📈 AI 逐月現金流</h2>${moveIn ? `<span class="label">交屋 ${ymLabel(moveIn.ym)}${monthsLeft > 0 ? `・還有 ${monthsLeft} 個月` : ""}</span>` : ""}</div>
+    ${moveIn ? `<div class="sum3">
+      <div><span class="label">交屋後餘額</span><span class="amt">${fmt(moveIn.bal)}</span><span class="fresh">計畫</span></div>
+      <div><span class="label">本月計畫存</span><span class="amt">${fmt(plan.find(r => r.ym === cur)?.net ?? 0)}</span><span class="fresh">淨現金流</span></div>
+      <div><span class="label">本月實際</span><span class="amt ${net >= 0 ? "plus" : "minus"}">${fmt(Math.round(net))}</span><span class="fresh">基金收支</span></div></div>` : ""}
+    <div class="plan-table" role="table">
+      <div class="pt-row pt-head" role="row"><span>月份</span><span>計畫淨額</span><span>實際</span><span>計畫餘額</span></div>
+      ${rows.map(r => { const a = r.ym <= cur ? actualNet(bm, r.ym) : null, big = r.house <= -100000;
+        return `<div class="pt-row ${r.ym === cur ? "now" : ""} ${r === moveIn ? "move" : ""}" role="row">
+          <span>${ymLabel(r.ym)}${r === moveIn ? " 🏠" : big ? " 🧱" : r.term ? `<small>房貸${r.term}</small>` : ""}</span>
+          <span class="${r.net < 0 ? "minus" : ""}">${fmt(r.net)}</span>
+          <span class="${a == null ? "dim" : a >= r.net ? "plus" : "minus"}">${a == null ? "—" : fmt(Math.round(a))}</span>
+          <span>${fmt(r.bal)}</span></div>`; }).join("")}
+    </div>
+    <button class="btn ghost" data-plan-all>${planAll ? "只看近期" : `看全部 ${plan.length} 個月`}</button>
+    <span class="fresh">🧱 = 頭期款／工程款・🏠 = 交屋・實際是基金當月收入－支出（投資不算支出）；改計畫到 Notion「📈 購屋現金流計畫」</span>
+  </section>`;
+}
+
 function renderHouse() {
   const head = `<div class="hello"><small>我們的家</small><h1>愛情小屋</h1></div>`;
   if (HOUSE === undefined) return `${head}<div class="empty">正在讀取房貸設定…</div>`;
@@ -1223,7 +1288,7 @@ function renderHouse() {
     : m.thisMonth > 0 ? `<span class="pill">本月繳了一部分</span>` : `<span class="pill warn">本月還沒繳</span>`;
   const editBtn = `<button class="btn ghost" id="house-edit">${has(price) || has(monthly) ? "編輯房貸資料" : "填入房貸資料"}</button>`;
 
-  return `${head}
+  return `${head}${planSection()}
   <div class="house-hero">${houseSvg(pct)}
     <div class="meta"><span class="label">還款進度</span>
       <span class="pct">${total ? (pct * 100).toFixed(1) : "—"}<small style="font-size:16px">%</small></span>
@@ -1917,7 +1982,7 @@ function intro() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-chart],[data-pick],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],[data-claw],[data-claw-start],[data-kuji-list],[data-kuji-hist],#logo,#logout,#house-edit,#card"); if (!t) return;
+  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-chart],[data-pick],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],[data-claw],[data-claw-start],[data-kuji-list],[data-kuji-hist],[data-plan-all],#logo,#logout,#house-edit,#card"); if (!t) return;
   if (t.id === "card") { if (!t.closest(".intro")) pickCardBg(); return; }
   if (t.dataset.range) { statRange = t.dataset.range; render(); return; }
   if (t.dataset.chart) { chartTab = t.dataset.chart; chartPick = null; render(); return; }
@@ -1937,6 +2002,7 @@ document.addEventListener("click", e => {
   else if (t.dataset.claw !== undefined) clawPress();
   else if (t.dataset.kujiList !== undefined) kujiList();
   else if (t.dataset.kujiHist !== undefined) kujiHistory();
+  else if (t.dataset.planAll !== undefined) { planAll = !planAll; render(); }
   else if (t.id === "logo") logoTap();
 });
 
