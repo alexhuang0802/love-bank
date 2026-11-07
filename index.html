@@ -182,7 +182,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .lv { display: flex; flex-direction: column; align-items: center; padding: 6px 0; border-radius: 10px; background: var(--ink); border: 1px solid var(--line); font-size: 13px; }
 .lv b { font-size: 12px; color: var(--text); font-weight: 500; } .lv small { font-size: 10px; color: var(--muted); line-height: 1.1; } .lv.no { opacity: .7; }
 .plan-table { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; max-height: 420px; overflow-y: auto; }
-.pt-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1.2fr; gap: 6px; padding: 8px 10px; font-size: 13px; font-variant-numeric: tabular-nums; border-top: 1px solid var(--line); }
+.pt-row { display: grid; grid-template-columns: 1.15fr 1fr 1fr 1.1fr 1.15fr; gap: 6px; padding: 8px 10px; font-size: 13px; font-variant-numeric: tabular-nums; border-top: 1px solid var(--line); }
 .pt-row span:not(:first-child) { text-align: right; } .pt-row small { margin-left: 4px; font-size: 10px; color: var(--muted); }
 .pt-head { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-size: 12px; border-top: 0; }
 .pt-note { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; margin-top: -2px; }
@@ -1244,7 +1244,6 @@ function actualNet(bm, k) {   // 收入扣開帳；支出不算投資（算存�
 // 這個月要付的錢、會進來的錢，寫在那一列下面
 function payNote(r, moveIn) {
   const parts = [];
-  if (r.house < 0) parts.push(`<span class="minus">${moveIn ? "🏠 交屋款" : r.term ? `🏦 房貸第 ${r.term} 期` : "🧱 購屋款"} −${fmt(-r.house)}</span>`);
   if (r.other > 0) parts.push(`<span class="plus">💰 其他收入 +${fmt(r.other)}</span>`);
   return parts.length ? `<div class="pt-note">${parts.join("")}</div>` : "";
 }
@@ -1306,12 +1305,13 @@ function planSection() {
       <div><span class="label">本月目標</span><span class="amt">${goal ? fmt(goal) : "不用存"}</span><span class="fresh">${bonusNow ? "含獎金" : "收入－支出"}</span></div>
       <div><span class="label">本月實際</span><span class="amt ${net >= 0 ? "plus" : "minus"}">${fmt(Math.round(net))}</span><span class="fresh">基金收支</span></div></div>` : ""}
     <div class="plan-table" role="table">
-      <div class="pt-row pt-head" role="row"><span>月份</span><span>目標</span><span>實際</span><span>預估餘額</span></div>
+      <div class="pt-row pt-head" role="row"><span>月份</span><span>目標</span><span>實際</span><span>購屋支出</span><span>預估餘額</span></div>
       ${rows.map(r => { const a = r.ym <= cur ? actualNet(bm, r.ym) : null, t = targetOf(r.ym), big = r.house <= -100000;
         return `<div class="pt-row ${r.ym === cur ? "now" : ""} ${r === moveIn ? "move" : ""}" role="row">
           <span>${ymLabel(r.ym)}${r === moveIn ? " 🏠" : big ? " 🧱" : ""}${r.bonus ? " 🎁" : ""}${r.term && !big ? `<small>房貸${r.term}</small>` : ""}</span>
           <span>${t ? fmt(t) : "—"}</span>
           <span class="${a == null || !t ? "dim" : a >= t ? "plus" : "minus"}">${a == null ? "—" : fmt(Math.round(a))}</span>
+          <span class="${r.house < 0 ? "minus" : "dim"}">${r.house < 0 ? `−${fmt(-r.house)}` : "—"}</span>
           <span class="${r.ym === cur ? "now-bal" : proj[r.ym] < 0 ? "minus" : ""}">${proj[r.ym] == null ? "—" : fmt(Math.round(proj[r.ym]))}</span>
           ${payNote(r, r === moveIn)}</div>`; }).join("")}
     </div>
