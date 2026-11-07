@@ -175,6 +175,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .level-main .big small { font-size: 13px; color: var(--muted); margin-left: 6px; } .level-main .big.neg { color: var(--minus); }
 .level-badge { padding: 3px 10px; border-radius: 99px; font-size: 13px; border: 1px solid var(--line); color: var(--gold); }
 .level-badge.ok { color: var(--plus); border-color: rgba(159,208,168,.5); background: rgba(159,208,168,.08); }
+.us-toggle { display: flex; align-items: center; gap: 6px; } .us-toggle button { padding: 5px 12px; border-radius: 99px; border: 1px solid var(--line); background: transparent; color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; } .us-toggle button.on { color: var(--gold); border-color: var(--gold); background: rgba(201,177,126,.1); } .us-toggle .fresh { margin-left: auto; }
 .progress-row { display: flex; justify-content: space-between; align-items: baseline; padding-top: 8px; border-top: 1px solid var(--line); }
 .progress-pct { font-family: var(--f-display); font-size: 22px; } .progress-pct.plus { color: var(--plus); } .progress-pct.minus { color: var(--minus); }
 .level-hist { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
@@ -1232,6 +1233,7 @@ const goalOf = ym => ym < "2027-06" ? 90000 : ym < "2028-06" ? 95000 : 100000;  
 const ymOf = d => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 const ymLabel = k => `${k.slice(0, 4)}/${Number(k.slice(5))}`;
 let planAll = false;
+let planUS = (() => { try { return localStorage.getItem("lb_plan_us") !== "0"; } catch { return true; } })();   // 預估餘額要不要算美股
 const CHALLENGE_START = "2026-12";   // 存錢關卡從這個月開始算（11 月付頭期款，不用存）
 const HOUSE_TAGS = ["房貸", "房貸還款", "購屋", "購屋支出", "頭期款", "工程款", "交屋款"];   // 購屋支出不算進關卡
 function actualNet(bm, k) {   // 收入扣開帳；支出不算投資（算存下來的錢）也不算購屋支出（另外照計畫付）
@@ -1265,7 +1267,8 @@ function planSection() {
   const moveIn = plan.filter(r => !r.term && r.house <= -1000000).at(-1);       // 交屋那個月（最後一筆大筆購屋支出）
   const monthsLeft = moveIn ? (Number(moveIn.ym.slice(0, 4)) - Number(cur.slice(0, 4))) * 12 + Number(moveIn.ym.slice(5)) - Number(cur.slice(5)) : null;
   // 預估餘額：本月＝目前總資產扣掉本月的購屋款（加上其他收入）；之後每月加上「門檻＋獎金」，再扣購屋款、加其他收入
-  const now = FUND.total ?? 0, proj = {};
+  const usValue = (FUND.stocks ?? []).filter(x => x.market === "美股").reduce((t, x) => t + (x.value ?? 0), 0);
+  const now = (FUND.total ?? 0) - (planUS ? 0 : usValue), proj = {};
   // 本月的購屋款如果已經付了、也記帳了，總資產已經扣過，只扣還沒付的部分（避免扣兩次）
   const paidHouse = HOUSE_TAGS.reduce((t, tag) => t + (bm[cur]?.expense?.[tag] ?? 0), 0);
   const houseLeft = Math.min(0, (byYm[cur]?.house ?? 0) + paidHouse);
@@ -1294,6 +1297,7 @@ function planSection() {
   function cashflowSection() { return `
   <section class="sec">
     <div class="sec-head"><h2>📈 AI 逐月現金流</h2>${moveIn ? `<span class="label">交屋 ${ymLabel(moveIn.ym)}${monthsLeft > 0 ? `・還有 ${monthsLeft} 個月` : ""}</span>` : ""}</div>
+    ${usValue ? `<div class="seg us-toggle"><button class="${planUS ? "on" : ""}" data-plan-us="1">含美股</button><button class="${planUS ? "" : "on"}" data-plan-us="0">不含美股</button><span class="fresh">美股 ${fmt(Math.round(usValue))}</span></div>` : ""}
     ${moveIn ? `<div class="sum3">
       <div><span class="label">${ymLabel(moveIn.ym)} 交屋後</span><span class="amt">${fmt(Math.round(proj[moveIn.ym] ?? now))}</span><span class="fresh">付完交屋款 ${fmt(-moveIn.house)}</span></div>
       <div><span class="label">本月目標</span><span class="amt">${goal ? fmt(goal) : "不用存"}</span><span class="fresh">${bonusNow ? "含獎金" : "收入－支出"}</span></div>
@@ -1309,7 +1313,7 @@ function planSection() {
           ${payNote(r, r === moveIn)}</div>`; }).join("")}
     </div>
     <button class="btn ghost" data-plan-all>${planAll ? "只看近 12 個月" : `看之後全部 ${plan.filter(r => r.ym >= cur).length} 個月`}</button>
-    <span class="fresh">目標＝門檻＋當月獎金（🎁）・預估餘額：本月是基金目前總資產 ${fmt(Math.round(now))} 扣掉本月購屋款，之後每月加上目標、扣購屋款・🧱 = 頭期款／工程款・🏠 = 交屋・改計畫到 Notion「📈 購屋現金流計畫」</span>
+    <span class="fresh">目標＝門檻＋當月獎金（🎁）・預估餘額：本月是基金目前總資產${planUS ? "" : "（不含美股）"} ${fmt(Math.round(now))} 扣掉本月購屋款，之後每月加上目標、扣購屋款・🧱 = 頭期款／工程款・🏠 = 交屋・改計畫到 Notion「📈 購屋現金流計畫」</span>
   </section>`; }
 }
 
@@ -2021,7 +2025,7 @@ function intro() {
 }
 
 document.addEventListener("click", e => {
-  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-chart],[data-pick],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],[data-claw],[data-claw-start],[data-kuji-list],[data-kuji-hist],[data-plan-all],#logo,#logout,#house-edit,#card"); if (!t) return;
+  const t = e.target.closest("[data-tab],[data-go],[data-hist],[data-range],[data-chart],[data-pick],[data-txn],[data-card],[data-draw],[data-starter],[data-push],[data-buy],[data-claw],[data-claw-start],[data-kuji-list],[data-kuji-hist],[data-plan-all],[data-plan-us],#logo,#logout,#house-edit,#card"); if (!t) return;
   if (t.id === "card") { if (!t.closest(".intro")) pickCardBg(); return; }
   if (t.dataset.range) { statRange = t.dataset.range; render(); return; }
   if (t.dataset.chart) { chartTab = t.dataset.chart; chartPick = null; render(); return; }
@@ -2042,6 +2046,7 @@ document.addEventListener("click", e => {
   else if (t.dataset.kujiList !== undefined) kujiList();
   else if (t.dataset.kujiHist !== undefined) kujiHistory();
   else if (t.dataset.planAll !== undefined) { planAll = !planAll; render(); }
+  else if (t.dataset.planUs !== undefined) { planUS = t.dataset.planUs === "1"; try { localStorage.setItem("lb_plan_us", planUS ? "1" : "0"); } catch {} render(); }
   else if (t.id === "logo") logoTap();
 });
 
