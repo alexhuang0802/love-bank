@@ -1259,7 +1259,10 @@ function planSection() {
   const monthsLeft = moveIn ? (Number(moveIn.ym.slice(0, 4)) - Number(cur.slice(0, 4))) * 12 + Number(moveIn.ym.slice(5)) - Number(cur.slice(5)) : null;
   // 預估餘額：本月＝目前總資產扣掉本月的購屋款（加上其他收入）；之後每月加上「門檻＋獎金」，再扣購屋款、加其他收入
   const now = FUND.total ?? 0, proj = {};
-  { let b = now + (byYm[cur]?.house ?? 0) + (byYm[cur]?.other ?? 0); proj[cur] = b;
+  // 本月的購屋款如果已經付了、也記帳了，總資產已經扣過，只扣還沒付的部分（避免扣兩次）
+  const paidHouse = HOUSE_TAGS.reduce((t, tag) => t + (bm[cur]?.expense?.[tag] ?? 0), 0);
+  const houseLeft = Math.min(0, (byYm[cur]?.house ?? 0) + paidHouse);
+  { let b = now + houseLeft + (byYm[cur]?.other ?? 0); proj[cur] = b;
     for (const r of plan) if (r.ym > cur) { b += targetOf(r.ym) + r.house + r.other; proj[r.ym] = b; } }
   const end = ymOf(new Date(Date.UTC(Number(cur.slice(0, 4)), Number(cur.slice(5)) - 1 + 12, 1)));   // 往後看 12 個月
   const rows = plan.filter(r => r.ym >= cur && (planAll || r.ym <= end));   // 過去的月份不顯示，本月在最上面；預設看到 12 個月後
