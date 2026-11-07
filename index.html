@@ -177,7 +177,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .level-badge.ok { color: var(--plus); border-color: rgba(159,208,168,.5); background: rgba(159,208,168,.08); }
 .level-hist { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .lv { display: flex; flex-direction: column; align-items: center; padding: 6px 0; border-radius: 10px; background: var(--ink); border: 1px solid var(--line); font-size: 13px; }
-.lv b { font-size: 11px; color: var(--muted); font-weight: 500; } .lv.no { opacity: .7; }
+.lv b { font-size: 12px; color: var(--text); font-weight: 500; } .lv small { font-size: 10px; color: var(--muted); line-height: 1.1; } .lv.no { opacity: .7; }
 .plan-table { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; max-height: 420px; overflow-y: auto; }
 .pt-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1.2fr; gap: 6px; padding: 8px 10px; font-size: 13px; font-variant-numeric: tabular-nums; border-top: 1px solid var(--line); }
 .pt-row span:not(:first-child) { text-align: right; } .pt-row small { margin-left: 4px; font-size: 10px; color: var(--muted); }
@@ -1268,7 +1268,7 @@ function planSection() {
       <span class="big ${net >= 0 ? "" : "neg"}">${net < 0 ? "−" : ""}${fmt(Math.abs(Math.round(net)))}<small>/ ${fmt(goal)}</small></span></div>
     <div class="bar ${ok ? "in" : "gold"}"><i style="width:${Math.max(0, Math.min(100, net / goal * 100))}%"></i></div>
     <span class="fresh">${ok ? `這個月已經存超過目標 ${fmt(Math.round(net - goal))}` : `還差 ${fmt(Math.round(goal - net))} 就過關`}・基金收入－支出（投資不算支出）${bonusNow ? `・本月有獎金，目標＝${fmt(goalOf(cur))}＋獎金 ${fmt(bonusNow)}` : ""}</span>
-    ${past.length ? `<div class="level-hist">${past.map(p => `<span class="lv ${p.net >= p.goal ? "ok" : "no"}" title="${ymLabel(p.k)} ${fmt(Math.round(p.net))} / ${fmt(p.goal)}"><b>${Number(p.k.slice(5))}月</b>${p.net >= p.goal ? "✅" : "❌"}</span>`).join("")}</div>
+    ${past.length ? `<div class="level-hist">${past.map(p => `<span class="lv ${p.net >= p.goal ? "ok" : "no"}" title="${ymLabel(p.k)} ${fmt(Math.round(p.net))} / ${fmt(p.goal)}"><small>${p.k.slice(0, 4)}</small><b>${Number(p.k.slice(5))}月</b>${p.net >= p.goal ? "✅" : "❌"}</span>`).join("")}</div>
       <span class="fresh">${streak ? `連續過關 ${streak} 個月 🔥` : "上個月沒過關，這個月加油"}</span>` : ""}
     <span class="fresh">門檻：2027/5 前 9 萬・2027/6 起 9.5 萬・2028/6 起 10 萬；有獎金的月份要再加上獎金</span>
   </section>
