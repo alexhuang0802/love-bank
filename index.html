@@ -1232,7 +1232,7 @@ const goalOf = ym => ym < "2027-06" ? 90000 : ym < "2028-06" ? 95000 : 100000;  
 const ymOf = d => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 const ymLabel = k => `${k.slice(0, 4)}/${Number(k.slice(5))}`;
 let planAll = false;
-const CHALLENGE_START = "2026-11";   // 存錢關卡從這個月開始算
+const CHALLENGE_START = "2026-12";   // 存錢關卡從這個月開始算（11 月付頭期款，不用存）
 const HOUSE_TAGS = ["房貸", "房貸還款", "購屋", "購屋支出", "頭期款", "工程款", "交屋款"];   // 購屋支出不算進關卡
 function actualNet(bm, k) {   // 收入扣開帳；支出不算投資（算存下來的錢）也不算購屋支出（另外照計畫付）
   const r = bm?.[k]; if (!r) return null;
@@ -1252,15 +1252,15 @@ function planSection() {
   const cur = ymOf(new Date(Date.now() + 8 * 3600e3));
   const byYm = Object.fromEntries(plan.map(r => [r.ym, r]));
   // 每月要存＝門檻（9 萬／9.5 萬／10 萬）＋當月獎金
-  const targetOf = ym => goalOf(ym) + (byYm[ym]?.bonus ?? 0);
+  const targetOf = ym => ym < CHALLENGE_START ? 0 : goalOf(ym) + (byYm[ym]?.bonus ?? 0);
   const goal = targetOf(cur), net = actualNet(bm, cur) ?? 0, ok = net >= goal;
   // 過去幾個月的關卡紀錄（有記帳的月份，最多 12 個月）
   const past = monthKeys(cur, 13).slice(0, 12).filter(k => bm[k] && k >= CHALLENGE_START).map(k => ({ k, net: actualNet(bm, k), goal: targetOf(k) }));
   let streak = 0; for (let i = past.length - 1; i >= 0 && past[i].net >= past[i].goal; i--) streak++;
-  // 目前存錢進度：從開始挑戰到今天，實際累積 vs 預期累積（本月照今天是第幾天按比例算）
-  const twNow = new Date(Date.now() + 8 * 3600e3), dim = new Date(Date.UTC(twNow.getUTCFullYear(), twNow.getUTCMonth() + 1, 0)).getUTCDate();
-  const doneMonths = past.map(p => p.k), sumActual = doneMonths.reduce((t, k) => t + (actualNet(bm, k) ?? 0), 0) + net;
-  const sumExpect = doneMonths.reduce((t, k) => t + targetOf(k), 0) + goal * twNow.getUTCDate() / dim;
+  // 目前存錢進度：從開始挑戰累計到本月，實際存的 ÷ 目標加總 − 1（例：目標 9 萬存了 18 萬＝超前 100%）
+  const started = cur >= CHALLENGE_START;
+  const months = plan.map(r => r.ym).filter(k => k >= CHALLENGE_START && k <= cur);
+  const sumActual = months.reduce((t, k) => t + (actualNet(bm, k) ?? 0), 0), sumExpect = months.reduce((t, k) => t + targetOf(k), 0);
   const progress = sumExpect > 0 ? (sumActual / sumExpect - 1) * 100 : 0;
   const moveIn = plan.filter(r => !r.term && r.house <= -1000000).at(-1);       // 交屋那個月（最後一筆大筆購屋支出）
   const monthsLeft = moveIn ? (Number(moveIn.ym.slice(0, 4)) - Number(cur.slice(0, 4))) * 12 + Number(moveIn.ym.slice(5)) - Number(cur.slice(5)) : null;
@@ -1274,6 +1274,10 @@ function planSection() {
   const end = ymOf(new Date(Date.UTC(Number(cur.slice(0, 4)), Number(cur.slice(5)) - 1 + 12, 1)));   // 往後看 12 個月
   const rows = plan.filter(r => r.ym >= cur && (planAll || r.ym <= end));   // 過去的月份不顯示，本月在最上面；預設看到 12 個月後
   const bonusNow = byYm[cur]?.bonus ?? 0;
+  if (!started) return `<section class="sec level-card">
+    <div class="sec-head"><h2>🏁 存錢關卡</h2><span class="label">${ymLabel(CHALLENGE_START)} 開始</span></div>
+    <span class="fresh">這個月付頭期款，不用存。${ymLabel(CHALLENGE_START)} 起每月目標 ${fmt(goalOf(CHALLENGE_START))}（有獎金的月份再加上獎金），存錢進度也從那時候開始累計 💪</span>
+  </section>${cashflowSection()}`;
   return `<section class="sec level-card">
     <div class="sec-head"><h2>🏁 本月存錢關卡</h2><span class="label">${ymLabel(cur)}</span></div>
     <div class="level-main"><span class="level-badge ${ok ? "ok" : ""}">${ok ? "過關 ✅" : "挑戰中"}</span>
@@ -1284,28 +1288,29 @@ function planSection() {
       <span class="fresh">${streak ? `連續過關 ${streak} 個月 🔥` : "上個月沒過關，這個月加油"}</span>` : `<span class="fresh">${ymLabel(CHALLENGE_START)} 開始挑戰，第一關就是這個月 💪</span>`}
     <div class="progress-row"><span class="label">目前存錢進度</span>
       <span class="progress-pct ${progress >= 0 ? "plus" : "minus"}">${progress >= 0 ? "超前" : "落後"} ${Math.abs(progress).toFixed(1)}%</span></div>
-    <span class="fresh">實際累積 ${fmt(Math.round(sumActual))}／預期 ${fmt(Math.round(sumExpect))}（${ymLabel(CHALLENGE_START)} 起，本月按天數比例）</span>
+    <span class="fresh">實際累積 ${fmt(Math.round(sumActual))}／目標累積 ${fmt(Math.round(sumExpect))}（${ymLabel(CHALLENGE_START)} 起到本月）</span>
     <span class="fresh">門檻：2027/5 前 9 萬・2027/6 起 9.5 萬・2028/6 起 10 萬；有獎金的月份要再加上獎金</span>
-  </section>
+  </section>${cashflowSection()}`;
+  function cashflowSection() { return `
   <section class="sec">
     <div class="sec-head"><h2>📈 AI 逐月現金流</h2>${moveIn ? `<span class="label">交屋 ${ymLabel(moveIn.ym)}${monthsLeft > 0 ? `・還有 ${monthsLeft} 個月` : ""}</span>` : ""}</div>
     ${moveIn ? `<div class="sum3">
       <div><span class="label">${ymLabel(moveIn.ym)} 交屋後</span><span class="amt">${fmt(Math.round(proj[moveIn.ym] ?? now))}</span><span class="fresh">付完交屋款 ${fmt(-moveIn.house)}</span></div>
-      <div><span class="label">本月目標</span><span class="amt">${fmt(goal)}</span><span class="fresh">${bonusNow ? "含獎金" : "收入－支出"}</span></div>
+      <div><span class="label">本月目標</span><span class="amt">${goal ? fmt(goal) : "不用存"}</span><span class="fresh">${bonusNow ? "含獎金" : "收入－支出"}</span></div>
       <div><span class="label">本月實際</span><span class="amt ${net >= 0 ? "plus" : "minus"}">${fmt(Math.round(net))}</span><span class="fresh">基金收支</span></div></div>` : ""}
     <div class="plan-table" role="table">
       <div class="pt-row pt-head" role="row"><span>月份</span><span>目標</span><span>實際</span><span>預估餘額</span></div>
       ${rows.map(r => { const a = r.ym <= cur ? actualNet(bm, r.ym) : null, t = targetOf(r.ym), big = r.house <= -100000;
         return `<div class="pt-row ${r.ym === cur ? "now" : ""} ${r === moveIn ? "move" : ""}" role="row">
           <span>${ymLabel(r.ym)}${r === moveIn ? " 🏠" : big ? " 🧱" : ""}${r.bonus ? " 🎁" : ""}${r.term && !big ? `<small>房貸${r.term}</small>` : ""}</span>
-          <span>${fmt(t)}</span>
-          <span class="${a == null ? "dim" : a >= t ? "plus" : "minus"}">${a == null ? "—" : fmt(Math.round(a))}</span>
+          <span>${t ? fmt(t) : "—"}</span>
+          <span class="${a == null || !t ? "dim" : a >= t ? "plus" : "minus"}">${a == null ? "—" : fmt(Math.round(a))}</span>
           <span class="${r.ym === cur ? "now-bal" : proj[r.ym] < 0 ? "minus" : ""}">${proj[r.ym] == null ? "—" : fmt(Math.round(proj[r.ym]))}</span>
           ${payNote(r, r === moveIn)}</div>`; }).join("")}
     </div>
     <button class="btn ghost" data-plan-all>${planAll ? "只看近 12 個月" : `看之後全部 ${plan.filter(r => r.ym >= cur).length} 個月`}</button>
     <span class="fresh">目標＝門檻＋當月獎金（🎁）・預估餘額：本月是基金目前總資產 ${fmt(Math.round(now))} 扣掉本月購屋款，之後每月加上目標、扣購屋款・🧱 = 頭期款／工程款・🏠 = 交屋・改計畫到 Notion「📈 購屋現金流計畫」</span>
-  </section>`;
+  </section>`; }
 }
 
 function renderHouse() {
