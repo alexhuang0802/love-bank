@@ -182,6 +182,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .pt-row { display: grid; grid-template-columns: 1.3fr 1fr 1fr 1.2fr; gap: 6px; padding: 8px 10px; font-size: 13px; font-variant-numeric: tabular-nums; border-top: 1px solid var(--line); }
 .pt-row span:not(:first-child) { text-align: right; } .pt-row small { margin-left: 4px; font-size: 10px; color: var(--muted); }
 .pt-head { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-size: 12px; border-top: 0; }
+.pt-note { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; margin-top: -2px; }
+.pt-note .minus { color: var(--minus); } .pt-note .plus { color: var(--plus); }
 .pt-row.now { background: rgba(201,177,126,.1); } .pt-row .now-bal { color: var(--gold); } .pt-row.move { background: rgba(159,208,168,.08); }
 .pt-row .plus { color: var(--plus); } .pt-row .minus { color: var(--minus); } .pt-row .dim { color: var(--muted); }
 .row.used .meta b { color: var(--muted); }
@@ -1232,6 +1234,14 @@ function actualNet(bm, k) {   // 跟收支分析同一套：收入扣開帳，�
   const r = bm?.[k]; if (!r) return null;
   return sumObj(r.income) - (r.opening ?? 0) - (sumObj(r.expense) - (r.expense?.[SKIP_EXPENSE_TAG] ?? 0));
 }
+// 這個月要付的錢、會進來的錢，寫在那一列下面
+function payNote(r, moveIn) {
+  const parts = [];
+  if (r.house < 0) parts.push(`<span class="minus">${moveIn ? "🏠 交屋款" : r.term ? `🏦 房貸第 ${r.term} 期` : "🧱 購屋款"} −${fmt(-r.house)}</span>`);
+  if (r.other > 0) parts.push(`<span class="plus">💰 其他收入 +${fmt(r.other)}</span>`);
+  if (r.bonus > 0) parts.push(`<span class="plus">🎁 獎金 +${fmt(r.bonus)}</span>`);
+  return parts.length ? `<div class="pt-note">${parts.join("")}</div>` : "";
+}
 function planSection() {
   const plan = FUND?.plan, bm = FUND?.stats?.byMonth;
   if (!plan?.length || !bm) return "";
@@ -1250,7 +1260,7 @@ function planSection() {
   { let b = now + (byYm[cur]?.house ?? 0) + (byYm[cur]?.other ?? 0); proj[cur] = b;
     for (const r of plan) if (r.ym > cur) { b += targetOf(r.ym) + r.house + r.other; proj[r.ym] = b; } }
   const end = ymOf(new Date(Date.UTC(Number(cur.slice(0, 4)), Number(cur.slice(5)) - 1 + 12, 1)));   // 往後看 12 個月
-  const rows = planAll ? plan : plan.filter(r => r.ym >= monthKeys(cur, 4)[0] && r.ym <= end);   // 預設：前 3 個月～後 12 個月
+  const rows = plan.filter(r => r.ym >= cur && (planAll || r.ym <= end));   // 過去的月份不顯示，本月在最上面；預設看到 12 個月後
   const bonusNow = byYm[cur]?.bonus ?? 0;
   return `<section class="sec level-card">
     <div class="sec-head"><h2>🏁 本月存錢關卡</h2><span class="label">${ymLabel(cur)}</span></div>
@@ -1275,9 +1285,10 @@ function planSection() {
           <span>${ymLabel(r.ym)}${r === moveIn ? " 🏠" : big ? " 🧱" : ""}${r.bonus ? " 🎁" : ""}${r.term && !big ? `<small>房貸${r.term}</small>` : ""}</span>
           <span>${fmt(t)}</span>
           <span class="${a == null ? "dim" : a >= t ? "plus" : "minus"}">${a == null ? "—" : fmt(Math.round(a))}</span>
-          <span class="${r.ym === cur ? "now-bal" : proj[r.ym] < 0 ? "minus" : ""}">${proj[r.ym] == null ? "—" : fmt(Math.round(proj[r.ym]))}</span></div>`; }).join("")}
+          <span class="${r.ym === cur ? "now-bal" : proj[r.ym] < 0 ? "minus" : ""}">${proj[r.ym] == null ? "—" : fmt(Math.round(proj[r.ym]))}</span>
+          ${payNote(r, r === moveIn)}</div>`; }).join("")}
     </div>
-    <button class="btn ghost" data-plan-all>${planAll ? "只看近期" : `看全部 ${plan.length} 個月`}</button>
+    <button class="btn ghost" data-plan-all>${planAll ? "只看近 12 個月" : `看之後全部 ${plan.filter(r => r.ym >= cur).length} 個月`}</button>
     <span class="fresh">目標＝門檻＋當月獎金（🎁）・預估餘額：本月是基金目前總資產 ${fmt(Math.round(now))} 扣掉本月購屋款，之後每月加上目標、扣購屋款・🧱 = 頭期款／工程款・🏠 = 交屋・改計畫到 Notion「📈 購屋現金流計畫」</span>
   </section>`;
 }
