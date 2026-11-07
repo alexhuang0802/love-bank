@@ -1277,7 +1277,7 @@ function planSection() {
   <section class="sec">
     <div class="sec-head"><h2>📈 AI 逐月現金流</h2>${moveIn ? `<span class="label">交屋 ${ymLabel(moveIn.ym)}${monthsLeft > 0 ? `・還有 ${monthsLeft} 個月` : ""}</span>` : ""}</div>
     ${moveIn ? `<div class="sum3">
-      <div><span class="label">交屋後餘額</span><span class="amt">${fmt(Math.round(proj[moveIn.ym] ?? now))}</span><span class="fresh">用目前資產預估</span></div>
+      <div><span class="label">${ymLabel(moveIn.ym)} 交屋後</span><span class="amt">${fmt(Math.round(proj[moveIn.ym] ?? now))}</span><span class="fresh">付完交屋款 ${fmt(-moveIn.house)}</span></div>
       <div><span class="label">本月目標</span><span class="amt">${fmt(goal)}</span><span class="fresh">${bonusNow ? "含獎金" : "收入－支出"}</span></div>
       <div><span class="label">本月實際</span><span class="amt ${net >= 0 ? "plus" : "minus"}">${fmt(Math.round(net))}</span><span class="fresh">基金收支</span></div></div>` : ""}
     <div class="plan-table" role="table">
