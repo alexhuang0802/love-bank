@@ -175,6 +175,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .level-main .big small { font-size: 13px; color: var(--muted); margin-left: 6px; } .level-main .big.neg { color: var(--minus); }
 .level-badge { padding: 3px 10px; border-radius: 99px; font-size: 13px; border: 1px solid var(--line); color: var(--gold); }
 .level-badge.ok { color: var(--plus); border-color: rgba(159,208,168,.5); background: rgba(159,208,168,.08); }
+.progress-row { display: flex; justify-content: space-between; align-items: baseline; padding-top: 8px; border-top: 1px solid var(--line); }
+.progress-pct { font-family: var(--f-display); font-size: 22px; } .progress-pct.plus { color: var(--plus); } .progress-pct.minus { color: var(--minus); }
 .level-hist { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
 .lv { display: flex; flex-direction: column; align-items: center; padding: 6px 0; border-radius: 10px; background: var(--ink); border: 1px solid var(--line); font-size: 13px; }
 .lv b { font-size: 12px; color: var(--text); font-weight: 500; } .lv small { font-size: 10px; color: var(--muted); line-height: 1.1; } .lv.no { opacity: .7; }
@@ -1255,6 +1257,11 @@ function planSection() {
   // 過去幾個月的關卡紀錄（有記帳的月份，最多 12 個月）
   const past = monthKeys(cur, 13).slice(0, 12).filter(k => bm[k] && k >= CHALLENGE_START).map(k => ({ k, net: actualNet(bm, k), goal: targetOf(k) }));
   let streak = 0; for (let i = past.length - 1; i >= 0 && past[i].net >= past[i].goal; i--) streak++;
+  // 目前存錢進度：從開始挑戰到今天，實際累積 vs 預期累積（本月照今天是第幾天按比例算）
+  const twNow = new Date(Date.now() + 8 * 3600e3), dim = new Date(Date.UTC(twNow.getUTCFullYear(), twNow.getUTCMonth() + 1, 0)).getUTCDate();
+  const doneMonths = past.map(p => p.k), sumActual = doneMonths.reduce((t, k) => t + (actualNet(bm, k) ?? 0), 0) + net;
+  const sumExpect = doneMonths.reduce((t, k) => t + targetOf(k), 0) + goal * twNow.getUTCDate() / dim;
+  const progress = sumExpect > 0 ? (sumActual / sumExpect - 1) * 100 : 0;
   const moveIn = plan.filter(r => !r.term && r.house <= -1000000).at(-1);       // 交屋那個月（最後一筆大筆購屋支出）
   const monthsLeft = moveIn ? (Number(moveIn.ym.slice(0, 4)) - Number(cur.slice(0, 4))) * 12 + Number(moveIn.ym.slice(5)) - Number(cur.slice(5)) : null;
   // 預估餘額：本月＝目前總資產扣掉本月的購屋款（加上其他收入）；之後每月加上「門檻＋獎金」，再扣購屋款、加其他收入
@@ -1275,6 +1282,9 @@ function planSection() {
     <span class="fresh">${ok ? `這個月已經存超過目標 ${fmt(Math.round(net - goal))}` : `還差 ${fmt(Math.round(goal - net))} 就過關`}・基金收入－支出（投資、購屋支出不算）${bonusNow ? `・本月有獎金，目標＝${fmt(goalOf(cur))}＋獎金 ${fmt(bonusNow)}` : ""}</span>
     ${past.length ? `<div class="level-hist">${past.map(p => `<span class="lv ${p.net >= p.goal ? "ok" : "no"}" title="${ymLabel(p.k)} ${fmt(Math.round(p.net))} / ${fmt(p.goal)}"><small>${p.k.slice(0, 4)}</small><b>${Number(p.k.slice(5))}月</b>${p.net >= p.goal ? "✅" : "❌"}</span>`).join("")}</div>
       <span class="fresh">${streak ? `連續過關 ${streak} 個月 🔥` : "上個月沒過關，這個月加油"}</span>` : `<span class="fresh">${ymLabel(CHALLENGE_START)} 開始挑戰，第一關就是這個月 💪</span>`}
+    <div class="progress-row"><span class="label">目前存錢進度</span>
+      <span class="progress-pct ${progress >= 0 ? "plus" : "minus"}">${progress >= 0 ? "超前" : "落後"} ${Math.abs(progress).toFixed(1)}%</span></div>
+    <span class="fresh">實際累積 ${fmt(Math.round(sumActual))}／預期 ${fmt(Math.round(sumExpect))}（${ymLabel(CHALLENGE_START)} 起，本月按天數比例）</span>
     <span class="fresh">門檻：2027/5 前 9 萬・2027/6 起 9.5 萬・2028/6 起 10 萬；有獎金的月份要再加上獎金</span>
   </section>
   <section class="sec">
