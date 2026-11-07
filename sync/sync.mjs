@@ -122,6 +122,12 @@ for (const [kind, rows] of [["income", income], ["expense", expense]]) {
     m[k] = (m[k] ?? 0) + Math.abs(t.amount);
   }
 }
+// 美股的收入（例：STRC股利）另外記一份，網銀「不含美股」時可以扣掉
+const usNames = stocks.filter(s => s.market === "美股").map(s => s.name);
+for (const t of income) {
+  if (!t.date || !t.tag || !usNames.some(n => (t.title ?? "").includes(n))) continue;
+  const m = byMonth[t.date.slice(0, 7)]; m.us = (m.us ?? 0) + Math.abs(t.amount);
+}
 // 「開帳」是一次性的期初資金，算月平均收入時要扣掉（跟記帳網站同一套規則）
 for (const t of income) {
   if (!t.date || !t.tag || t.title !== "開帳") continue;

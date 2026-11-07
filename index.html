@@ -1239,7 +1239,7 @@ const HOUSE_TAGS = ["房貸", "房貸還款", "購屋", "購屋支出", "頭期�
 function actualNet(bm, k) {   // 收入扣開帳；支出不算投資（算存下來的錢）也不算購屋支出（另外照計畫付）
   const r = bm?.[k]; if (!r) return null;
   const skip = [SKIP_EXPENSE_TAG, ...HOUSE_TAGS].reduce((t, tag) => t + (r.expense?.[tag] ?? 0), 0);
-  return sumObj(r.income) - (r.opening ?? 0) - (sumObj(r.expense) - skip);
+  return sumObj(r.income) - (r.opening ?? 0) - (planUS ? 0 : r.us ?? 0) - (sumObj(r.expense) - skip);
 }
 // 這個月要付的錢、會進來的錢，寫在那一列下面
 function payNote(r, moveIn) {
@@ -1279,6 +1279,7 @@ function planSection() {
   const bonusNow = byYm[cur]?.bonus ?? 0;
   if (!started) return `<section class="sec level-card">
     <div class="sec-head"><h2>🏁 存錢關卡</h2><span class="label">${ymLabel(CHALLENGE_START)} 開始</span></div>
+    ${usToggle()}
     <div class="progress-row"><span class="label">目前存錢進度</span><span class="progress-pct plus">超前 0.0%</span></div>
   </section>${cashflowSection()}`;
   return `<section class="sec level-card">
@@ -1289,15 +1290,17 @@ function planSection() {
     <span class="fresh">${ok ? `這個月已經存超過目標 ${fmt(Math.round(net - goal))}` : `還差 ${fmt(Math.round(goal - net))} 就過關`}・基金收入－支出（投資、購屋支出不算）${bonusNow ? `・本月有獎金，目標＝${fmt(goalOf(cur))}＋獎金 ${fmt(bonusNow)}` : ""}</span>
     ${past.length ? `<div class="level-hist">${past.map(p => `<span class="lv ${p.net >= p.goal ? "ok" : "no"}" title="${ymLabel(p.k)} ${fmt(Math.round(p.net))} / ${fmt(p.goal)}"><small>${p.k.slice(0, 4)}</small><b>${Number(p.k.slice(5))}月</b>${p.net >= p.goal ? "✅" : "❌"}</span>`).join("")}</div>
       <span class="fresh">${streak ? `連續過關 ${streak} 個月 🔥` : "上個月沒過關，這個月加油"}</span>` : `<span class="fresh">${ymLabel(CHALLENGE_START)} 開始挑戰，第一關就是這個月 💪</span>`}
+    ${usToggle()}
     <div class="progress-row"><span class="label">目前存錢進度</span>
       <span class="progress-pct ${progress >= 0 ? "plus" : "minus"}">${progress >= 0 ? "超前" : "落後"} ${Math.abs(progress).toFixed(1)}%</span></div>
-    <span class="fresh">實際累積 ${fmt(Math.round(sumActual))}／目標累積 ${fmt(Math.round(sumExpect))}（${ymLabel(CHALLENGE_START)} 起到本月）</span>
+    <span class="fresh">實際累積 ${fmt(Math.round(sumActual))}／目標累積 ${fmt(Math.round(sumExpect))}（${ymLabel(CHALLENGE_START)} 起到本月${planUS ? "" : "・不含美股股利"}）</span>
     <span class="fresh">門檻：2027/5 前 9 萬・2027/6 起 9.5 萬・2028/6 起 10 萬；有獎金的月份要再加上獎金</span>
   </section>${cashflowSection()}`;
+  function usToggle() { return usValue ? `<div class="seg us-toggle"><button class="${planUS ? "on" : ""}" data-plan-us="1">含美股</button><button class="${planUS ? "" : "on"}" data-plan-us="0">不含美股</button><span class="fresh">美股 ${fmt(Math.round(usValue))}</span></div>` : ""; }
   function cashflowSection() { return `
   <section class="sec">
     <div class="sec-head"><h2>📈 AI 逐月現金流</h2>${moveIn ? `<span class="label">交屋 ${ymLabel(moveIn.ym)}${monthsLeft > 0 ? `・還有 ${monthsLeft} 個月` : ""}</span>` : ""}</div>
-    ${usValue ? `<div class="seg us-toggle"><button class="${planUS ? "on" : ""}" data-plan-us="1">含美股</button><button class="${planUS ? "" : "on"}" data-plan-us="0">不含美股</button><span class="fresh">美股 ${fmt(Math.round(usValue))}</span></div>` : ""}
+    ${usToggle()}
     ${moveIn ? `<div class="sum3">
       <div><span class="label">${ymLabel(moveIn.ym)} 交屋後</span><span class="amt">${fmt(Math.round(proj[moveIn.ym] ?? now))}</span><span class="fresh">付完交屋款 ${fmt(-moveIn.house)}</span></div>
       <div><span class="label">本月目標</span><span class="amt">${goal ? fmt(goal) : "不用存"}</span><span class="fresh">${bonusNow ? "含獎金" : "收入－支出"}</span></div>
