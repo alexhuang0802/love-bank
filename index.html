@@ -1230,9 +1230,12 @@ const goalOf = ym => ym < "2027-06" ? 90000 : ym < "2028-06" ? 95000 : 100000;  
 const ymOf = d => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 const ymLabel = k => `${k.slice(0, 4)}/${Number(k.slice(5))}`;
 let planAll = false;
-function actualNet(bm, k) {   // 跟收支分析同一套：收入扣開帳，支出不算投資（投資算存下來的錢）
+const CHALLENGE_START = "2026-11";   // 存錢關卡從這個月開始算
+const HOUSE_TAGS = ["房貸", "房貸還款", "購屋", "購屋支出", "頭期款", "工程款", "交屋款"];   // 購屋支出不算進關卡
+function actualNet(bm, k) {   // 收入扣開帳；支出不算投資（算存下來的錢）也不算購屋支出（另外照計畫付）
   const r = bm?.[k]; if (!r) return null;
-  return sumObj(r.income) - (r.opening ?? 0) - (sumObj(r.expense) - (r.expense?.[SKIP_EXPENSE_TAG] ?? 0));
+  const skip = [SKIP_EXPENSE_TAG, ...HOUSE_TAGS].reduce((t, tag) => t + (r.expense?.[tag] ?? 0), 0);
+  return sumObj(r.income) - (r.opening ?? 0) - (sumObj(r.expense) - skip);
 }
 // 這個月要付的錢、會進來的錢，寫在那一列下面
 function payNote(r, moveIn) {
@@ -1251,7 +1254,7 @@ function planSection() {
   const targetOf = ym => goalOf(ym) + (byYm[ym]?.bonus ?? 0);
   const goal = targetOf(cur), net = actualNet(bm, cur) ?? 0, ok = net >= goal;
   // 過去幾個月的關卡紀錄（有記帳的月份，最多 12 個月）
-  const past = monthKeys(cur, 13).slice(0, 12).filter(k => bm[k]).map(k => ({ k, net: actualNet(bm, k), goal: targetOf(k) }));
+  const past = monthKeys(cur, 13).slice(0, 12).filter(k => bm[k] && k >= CHALLENGE_START).map(k => ({ k, net: actualNet(bm, k), goal: targetOf(k) }));
   let streak = 0; for (let i = past.length - 1; i >= 0 && past[i].net >= past[i].goal; i--) streak++;
   const moveIn = plan.filter(r => !r.term && r.house <= -1000000).at(-1);       // 交屋那個月（最後一筆大筆購屋支出）
   const monthsLeft = moveIn ? (Number(moveIn.ym.slice(0, 4)) - Number(cur.slice(0, 4))) * 12 + Number(moveIn.ym.slice(5)) - Number(cur.slice(5)) : null;
@@ -1267,9 +1270,9 @@ function planSection() {
     <div class="level-main"><span class="level-badge ${ok ? "ok" : ""}">${ok ? "過關 ✅" : "挑戰中"}</span>
       <span class="big ${net >= 0 ? "" : "neg"}">${net < 0 ? "−" : ""}${fmt(Math.abs(Math.round(net)))}<small>/ ${fmt(goal)}</small></span></div>
     <div class="bar ${ok ? "in" : "gold"}"><i style="width:${Math.max(0, Math.min(100, net / goal * 100))}%"></i></div>
-    <span class="fresh">${ok ? `這個月已經存超過目標 ${fmt(Math.round(net - goal))}` : `還差 ${fmt(Math.round(goal - net))} 就過關`}・基金收入－支出（投資不算支出）${bonusNow ? `・本月有獎金，目標＝${fmt(goalOf(cur))}＋獎金 ${fmt(bonusNow)}` : ""}</span>
+    <span class="fresh">${ok ? `這個月已經存超過目標 ${fmt(Math.round(net - goal))}` : `還差 ${fmt(Math.round(goal - net))} 就過關`}・基金收入－支出（投資、購屋支出不算）${bonusNow ? `・本月有獎金，目標＝${fmt(goalOf(cur))}＋獎金 ${fmt(bonusNow)}` : ""}</span>
     ${past.length ? `<div class="level-hist">${past.map(p => `<span class="lv ${p.net >= p.goal ? "ok" : "no"}" title="${ymLabel(p.k)} ${fmt(Math.round(p.net))} / ${fmt(p.goal)}"><small>${p.k.slice(0, 4)}</small><b>${Number(p.k.slice(5))}月</b>${p.net >= p.goal ? "✅" : "❌"}</span>`).join("")}</div>
-      <span class="fresh">${streak ? `連續過關 ${streak} 個月 🔥` : "上個月沒過關，這個月加油"}</span>` : ""}
+      <span class="fresh">${streak ? `連續過關 ${streak} 個月 🔥` : "上個月沒過關，這個月加油"}</span>` : `<span class="fresh">${ymLabel(CHALLENGE_START)} 開始挑戰，第一關就是這個月 💪</span>`}
     <span class="fresh">門檻：2027/5 前 9 萬・2027/6 起 9.5 萬・2028/6 起 10 萬；有獎金的月份要再加上獎金</span>
   </section>
   <section class="sec">
