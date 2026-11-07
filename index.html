@@ -1276,7 +1276,7 @@ function planSection() {
   const bonusNow = byYm[cur]?.bonus ?? 0;
   if (!started) return `<section class="sec level-card">
     <div class="sec-head"><h2>🏁 存錢關卡</h2><span class="label">${ymLabel(CHALLENGE_START)} 開始</span></div>
-    <span class="fresh">這個月付頭期款，不用存。${ymLabel(CHALLENGE_START)} 起每月目標 ${fmt(goalOf(CHALLENGE_START))}（有獎金的月份再加上獎金），存錢進度也從那時候開始累計 💪</span>
+    <div class="progress-row"><span class="label">目前存錢進度</span><span class="progress-pct plus">超前 0.0%</span></div>
   </section>${cashflowSection()}`;
   return `<section class="sec level-card">
     <div class="sec-head"><h2>🏁 本月存錢關卡</h2><span class="label">${ymLabel(cur)}</span></div>
