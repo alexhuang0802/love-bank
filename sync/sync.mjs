@@ -94,10 +94,11 @@ const month = { label: ym.replace("-", "/"), income: sum(inMonth(income)), expen
 // 愛情小屋：支出裡「房貸」分類的累計與本月（台灣時間）
 const thisYm = `${tw.getUTCFullYear()}-${String(tw.getUTCMonth() + 1).padStart(2, "0")}`;
 // 購屋現金流計畫：每月一列（月份 2026/10），網銀拿來跟實際收支比對、做每月存錢卡關
-const plan = (await queryAll(DS.plan)).map(({ properties: p }) => {
+const plan = (await queryAll(DS.plan)).map(({ id, properties: p }) => {
   const [y, m] = text(p["月份"]).split("/").map(Number);
   return { ym: `${y}-${String(m).padStart(2, "0")}`, term: num(p["期數"]), salary: num(p["月薪"]) ?? 0, bonus: num(p["獎金"]) ?? 0,
-    living: num(p["生活費"]) ?? 0, house: num(p["購屋支出"]) ?? 0, other: num(p["其他收入"]) ?? 0, net: num(p["淨現金流"]) ?? 0, bal: num(p["現金餘額"]) ?? 0 };
+    living: num(p["生活費"]) ?? 0, house: num(p["購屋支出"]) ?? 0, other: num(p["其他收入"]) ?? 0, net: num(p["淨現金流"]) ?? 0, bal: num(p["現金餘額"]) ?? 0,
+    snap: num(p["月底資產"]), snapUS: num(p["月底美股"]), id };
 }).filter(r => /^\d{4}-\d{2}$/.test(r.ym)).sort((a, b) => a.ym.localeCompare(b.ym));
 
 const mortgageRows = expense.filter(t => t.tag === "房貸");
@@ -222,10 +223,20 @@ const anniversaries = (await queryAll(DS.anniv)).map(({ properties: p }) => ({
   together: !!p["在一起"]?.checkbox, yearly: !!p["每年"]?.checkbox,
 })).filter(a => a.title && a.date);
 
+// 把目前的總資產寫進計畫表「這個月」那一列；每天覆蓋，月底最後一次同步就是當月的月底資產（網銀拿來算存錢進度）
+const total = cash.balance + stockValue, usValue = stocks.filter(s => s.market === "美股").reduce((t, s) => t + s.value, 0);
+const curPlan = plan.find(r => r.ym === thisYm);
+if (curPlan) {
+  const r = await fetch(`https://api.notion.com/v1/pages/${curPlan.id}`, { method: "PATCH", headers: NOTION_HEADERS,
+    body: JSON.stringify({ properties: { "月底資產": { number: Math.round(total) }, "月底美股": { number: Math.round(usValue) } } }) });
+  if (r.ok) { curPlan.snap = Math.round(total); curPlan.snapUS = Math.round(usValue); } else console.log("寫入月底資產失敗", r.status);
+}
+for (const r of plan) delete r.id;
+
 const txns = recent.map(({ id, ...t }) => t);
 const data = {
   updatedAt: new Date().toISOString(), fundName: "❤️❤️基金",
-  cash, month, stocks, stockValue, total: cash.balance + stockValue, txns,
+  cash, month, stocks, stockValue, total, txns,
   stats: { byMonth }, imageIndex, photos, cardImg, cardImgs, perks, mortgage, anniversaries, plan,
 };
 

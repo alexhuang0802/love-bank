@@ -1261,17 +1261,21 @@ function planSection() {
   // 目前存錢進度：從開始挑戰累計到本月，實際存的 ÷ 目標加總 − 1（例：目標 9 萬存了 18 萬＝超前 100%）
   const started = cur >= CHALLENGE_START;
   const months = plan.map(r => r.ym).filter(k => k >= CHALLENGE_START && k <= cur);
-  const sumActual = months.reduce((t, k) => t + (actualNet(bm, k) ?? 0), 0), sumExpect = months.reduce((t, k) => t + targetOf(k), 0);
+  const usValue = (FUND.stocks ?? []).filter(x => x.market === "美股").reduce((t, x) => t + (x.value ?? 0), 0);
+  const now = (FUND.total ?? 0) - (planUS ? 0 : usValue), proj = {};
+  // 存錢進度用「餘額」算：現在的資產 − 開始前一個月底的資產（計畫表「月底資產」） = 存下來的錢；
+  // 購屋款（有記在 Notion 的購屋支出／房貸）加回來、計畫裡的其他收入扣掉，不算在存錢裡
+  const startRow = byYm[ymOf(new Date(Date.UTC(Number(CHALLENGE_START.slice(0, 4)), Number(CHALLENGE_START.slice(5)) - 2, 1)))];
+  const houseOf = k => HOUSE_TAGS.reduce((t, tag) => t + (bm[k]?.expense?.[tag] ?? 0), 0);
+  const startBal = startRow?.snap != null ? startRow.snap - (planUS ? 0 : startRow.snapUS ?? 0) : null;
+  const sumActual = startBal == null ? months.reduce((t, k) => t + (actualNet(bm, k) ?? 0), 0)
+    : now - startBal + months.reduce((t, k) => t + houseOf(k) - (byYm[k]?.other ?? 0), 0);
+  const sumExpect = months.reduce((t, k) => t + targetOf(k), 0);
   const progress = sumExpect > 0 ? (sumActual / sumExpect - 1) * 100 : 0;
   const moveIn = plan.filter(r => !r.term && r.house <= -1000000).at(-1);       // 交屋那個月（最後一筆大筆購屋支出）
   const monthsLeft = moveIn ? (Number(moveIn.ym.slice(0, 4)) - Number(cur.slice(0, 4))) * 12 + Number(moveIn.ym.slice(5)) - Number(cur.slice(5)) : null;
-  // 預估餘額：本月＝目前總資產扣掉本月的購屋款（加上其他收入）；之後每月加上「門檻＋獎金」，再扣購屋款、加其他收入
-  const usValue = (FUND.stocks ?? []).filter(x => x.market === "美股").reduce((t, x) => t + (x.value ?? 0), 0);
-  const now = (FUND.total ?? 0) - (planUS ? 0 : usValue), proj = {};
-  // 本月的購屋款如果已經付了、也記帳了，總資產已經扣過，只扣還沒付的部分（避免扣兩次）
-  const paidHouse = HOUSE_TAGS.reduce((t, tag) => t + (bm[cur]?.expense?.[tag] ?? 0), 0);
-  const houseLeft = Math.min(0, (byYm[cur]?.house ?? 0) + paidHouse);
-  { let b = now + houseLeft + (byYm[cur]?.other ?? 0); proj[cur] = b;
+  // 預估餘額：本月＝目前實際的總資產；之後每月加上「門檻＋獎金」，再扣購屋款、加其他收入
+  { let b = now; proj[cur] = b;
     for (const r of plan) if (r.ym > cur) { b += targetOf(r.ym) + r.house + r.other; proj[r.ym] = b; } }
   const end = ymOf(new Date(Date.UTC(Number(cur.slice(0, 4)), Number(cur.slice(5)) - 1 + 12, 1)));   // 往後看 12 個月
   const rows = plan.filter(r => r.ym >= cur && (planAll || r.ym <= end));   // 過去的月份不顯示，本月在最上面；預設看到 12 個月後
@@ -1292,7 +1296,7 @@ function planSection() {
     ${usToggle()}
     <div class="progress-row"><span class="label">目前存錢進度</span>
       <span class="progress-pct ${progress >= 0 ? "plus" : "minus"}">${progress >= 0 ? "超前" : "落後"} ${Math.abs(progress).toFixed(1)}%</span></div>
-    <span class="fresh">實際累積 ${fmt(Math.round(sumActual))}／目標累積 ${fmt(Math.round(sumExpect))}（${ymLabel(CHALLENGE_START)} 起到本月${planUS ? "" : "・不含美股股利"}）</span>
+    <span class="fresh">實際累積 ${fmt(Math.round(sumActual))}／目標累積 ${fmt(Math.round(sumExpect))}（${startBal == null ? `${ymLabel(CHALLENGE_START)} 起到本月的收支` : `現在資產比 ${ymLabel(startRow.ym)} 底多的錢，購屋款不算`}${planUS ? "" : "・不含美股"}）</span>
     <span class="fresh">門檻：2027/5 前 9 萬・2027/6 起 9.5 萬・2028/6 起 10 萬；有獎金的月份要再加上獎金</span>
   </section>${cashflowSection()}`;
   function usToggle() { return usValue ? `<div class="seg us-toggle"><button class="${planUS ? "on" : ""}" data-plan-us="1">含美股</button><button class="${planUS ? "" : "on"}" data-plan-us="0">不含美股</button><span class="fresh">美股 ${fmt(Math.round(usValue))}</span></div>` : ""; }
@@ -1316,7 +1320,7 @@ function planSection() {
           ${payNote(r, r === moveIn)}</div>`; }).join("")}
     </div>
     <button class="btn ghost" data-plan-all>${planAll ? "只看近 12 個月" : `看之後全部 ${plan.filter(r => r.ym >= cur).length} 個月`}</button>
-    <span class="fresh">目標＝門檻＋當月獎金（🎁）・預估餘額：本月是基金目前總資產${planUS ? "" : "（不含美股）"} ${fmt(Math.round(now))} 扣掉本月購屋款，之後每月加上目標、扣購屋款・🧱 = 頭期款／工程款・🏠 = 交屋・改計畫到 Notion「📈 購屋現金流計畫」</span>
+    <span class="fresh">目標＝門檻＋當月獎金（🎁）・預估餘額：本月是基金目前實際總資產${planUS ? "" : "（不含美股）"} ${fmt(Math.round(now))}，之後每月加上目標、扣購屋款、加其他收入・🧱 = 頭期款／工程款・🏠 = 交屋・改計畫到 Notion「📈 購屋現金流計畫」</span>
   </section>`; }
 }
 
