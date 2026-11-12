@@ -724,7 +724,7 @@ function showImages(t) {
   new MutationObserver((_, o) => { if (!s.isConnected) { urls.forEach(URL.revokeObjectURL); o.disconnect(); } }).observe(document.body, { childList: true });
 }
 /* ===== 自動更新：手機會把網頁快取 10 分鐘；打開或切回來時看伺服器上有沒有比較新的版本，有就重新載入 ===== */
-if (/[?&]v=d+/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash);
+if (/[?&]v=[0-9]+/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash);
 async function checkUpdate() {
   try {
     const r = await fetch(location.pathname, { method: "HEAD", cache: "no-store" });
