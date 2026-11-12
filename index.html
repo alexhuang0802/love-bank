@@ -1307,10 +1307,10 @@ function planSection() {
     ${moveIn ? `<div class="sum3">
       <div><span class="label">${ymLabel(moveIn.ym)} 交屋後</span><span class="amt">${fmt(Math.round(proj[moveIn.ym] ?? now))}</span><span class="fresh">付完交屋款 ${fmt(-moveIn.house)}</span></div>
       <div><span class="label">本月目標</span><span class="amt">${goal ? fmt(goal) : "不用存"}</span><span class="fresh">${bonusNow ? "含獎金" : "收入－支出"}</span></div>
-      <div><span class="label">本月實際</span><span class="amt ${net >= 0 ? "plus" : "minus"}">${fmt(Math.round(net))}</span><span class="fresh">基金收支</span></div></div>` : ""}
+      <div><span class="label">本月實際</span><span class="amt ${!started ? "" : net >= 0 ? "plus" : "minus"}">${started ? fmt(Math.round(net)) : "—"}</span><span class="fresh">${started ? "基金收支" : `${ymLabel(CHALLENGE_START)} 開始算`}</span></div></div>` : ""}
     <div class="plan-table" role="table">
       <div class="pt-row pt-head" role="row"><span>月份</span><span>目標</span><span>實際</span><span>購屋支出</span><span>預估餘額</span></div>
-      ${rows.map(r => { const a = r.ym <= cur ? actualNet(bm, r.ym) : null, t = targetOf(r.ym), big = r.house <= -100000;
+      ${rows.map(r => { const a = r.ym <= cur && r.ym >= CHALLENGE_START ? actualNet(bm, r.ym) : null, t = targetOf(r.ym), big = r.house <= -100000;
         return `<div class="pt-row ${r.ym === cur ? "now" : ""} ${r === moveIn ? "move" : ""}" role="row">
           <span>${ymLabel(r.ym)}${r === moveIn ? " 🏠" : big ? " 🧱" : ""}${r.bonus ? " 🎁" : ""}${r.term && !big ? `<small>房貸${r.term}</small>` : ""}</span>
           <span>${t ? fmt(t) : "—"}</span>
