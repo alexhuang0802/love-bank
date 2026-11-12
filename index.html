@@ -723,6 +723,21 @@ function showImages(t) {
   });
   new MutationObserver((_, o) => { if (!s.isConnected) { urls.forEach(URL.revokeObjectURL); o.disconnect(); } }).observe(document.body, { childList: true });
 }
+/* ===== 自動更新：手機會把網頁快取 10 分鐘；打開或切回來時看伺服器上有沒有比較新的版本，有就重新載入 ===== */
+if (/[?&]v=d+/.test(location.search)) history.replaceState(null, "", location.pathname + location.hash);
+async function checkUpdate() {
+  try {
+    const r = await fetch(location.pathname, { method: "HEAD", cache: "no-store" });
+    const srv = Date.parse(r.headers.get("Last-Modified") ?? ""), mine = Date.parse(document.lastModified);
+    if (!(srv > mine + 5000)) return;
+    const k = "lb_upd_" + srv;
+    try { if (sessionStorage.getItem(k)) return; sessionStorage.setItem(k, "1"); } catch {}
+    location.replace(location.pathname + "?v=" + srv + location.hash);
+  } catch {}
+}
+checkUpdate();
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible") checkUpdate(); });
+
 /* ===== 密碼鎖：data.enc.json 用 PBKDF2 + AES-GCM 加密，密碼錯就解不開 ===== */
 const KEY_STORE = "private_bank_key";
 const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
