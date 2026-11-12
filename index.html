@@ -182,7 +182,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .lv { display: flex; flex-direction: column; align-items: center; padding: 6px 0; border-radius: 10px; background: var(--ink); border: 1px solid var(--line); font-size: 13px; }
 .lv b { font-size: 12px; color: var(--text); font-weight: 500; } .lv small { font-size: 10px; color: var(--muted); line-height: 1.1; } .lv.no { opacity: .7; }
 .plan-table { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; max-height: 420px; overflow-y: auto; }
-.pt-row { display: grid; grid-template-columns: 1.15fr 1fr 1fr 1.1fr 1.15fr; gap: 6px; padding: 8px 10px; font-size: 13px; font-variant-numeric: tabular-nums; border-top: 1px solid var(--line); }
+.pt-row { display: grid; grid-template-columns: 1.2fr 1fr 1.15fr 1.2fr; gap: 6px; padding: 8px 10px; font-size: 13px; font-variant-numeric: tabular-nums; border-top: 1px solid var(--line); }
 .pt-row span:not(:first-child) { text-align: right; } .pt-row small { margin-left: 4px; font-size: 10px; color: var(--muted); }
 .pt-head { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-size: 12px; border-top: 0; }
 .pt-note { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; margin-top: -2px; }
@@ -388,7 +388,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .seg3 { grid-template-columns: repeat(3, 1fr); }
 .sum3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border-radius: 12px; overflow: hidden; }
 .sum3 > div { background: var(--panel); padding: 12px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.sum3 .amt { font-size: 15px; }
+.sum3 .amt { font-size: 15px; } .sum3.sum2 { grid-template-columns: repeat(2, 1fr); }
 .bars { display: flex; flex-direction: column; gap: 12px; }
 .bar-row { display: flex; flex-direction: column; gap: 5px; }
 .bar-top { display: flex; justify-content: space-between; gap: 8px; font-size: 14px; }
@@ -1304,23 +1304,21 @@ function planSection() {
   <section class="sec">
     <div class="sec-head"><h2>📈 AI 逐月現金流</h2>${moveIn ? `<span class="label">交屋 ${ymLabel(moveIn.ym)}${monthsLeft > 0 ? `・還有 ${monthsLeft} 個月` : ""}</span>` : ""}</div>
     ${usToggle()}
-    ${moveIn ? `<div class="sum3">
+    ${moveIn ? `<div class="sum3 sum2">
       <div><span class="label">${ymLabel(moveIn.ym)} 交屋後</span><span class="amt">${fmt(Math.round(proj[moveIn.ym] ?? now))}</span><span class="fresh">付完交屋款 ${fmt(-moveIn.house)}</span></div>
-      <div><span class="label">本月目標</span><span class="amt">${goal ? fmt(goal) : "不用存"}</span><span class="fresh">${bonusNow ? "含獎金" : "收入－支出"}</span></div>
       <div><span class="label">本月實際</span><span class="amt ${!started ? "" : net >= 0 ? "plus" : "minus"}">${started ? fmt(Math.round(net)) : "—"}</span><span class="fresh">${started ? "基金收支" : `${ymLabel(CHALLENGE_START)} 開始算`}</span></div></div>` : ""}
     <div class="plan-table" role="table">
-      <div class="pt-row pt-head" role="row"><span>月份</span><span>目標</span><span>實際</span><span>購屋支出</span><span>預估餘額</span></div>
+      <div class="pt-row pt-head" role="row"><span>月份</span><span>實際</span><span>購屋支出</span><span>預估餘額</span></div>
       ${rows.map(r => { const a = r.ym <= cur && r.ym >= CHALLENGE_START ? actualNet(bm, r.ym) : null, t = targetOf(r.ym), big = r.house <= -100000;
         return `<div class="pt-row ${r.ym === cur ? "now" : ""} ${r === moveIn ? "move" : ""}" role="row">
           <span>${ymLabel(r.ym)}${r === moveIn ? " 🏠" : big ? " 🧱" : ""}${r.bonus ? " 🎁" : ""}${r.term && !big ? `<small>房貸${r.term}</small>` : ""}</span>
-          <span>${t ? fmt(t) : "—"}</span>
           <span class="${a == null || !t ? "dim" : a >= t ? "plus" : "minus"}">${a == null ? "—" : fmt(Math.round(a))}</span>
           <span class="${r.house < 0 ? "minus" : "dim"}">${r.house < 0 ? `−${fmt(-r.house)}` : "—"}</span>
           <span class="${r.ym === cur ? "now-bal" : proj[r.ym] < 0 ? "minus" : ""}">${proj[r.ym] == null ? "—" : fmt(Math.round(proj[r.ym]))}</span>
           ${payNote(r, r === moveIn)}</div>`; }).join("")}
     </div>
     <button class="btn ghost" data-plan-all>${planAll ? "只看近 12 個月" : `看之後全部 ${plan.filter(r => r.ym >= cur).length} 個月`}</button>
-    <span class="fresh">目標＝門檻＋當月獎金（🎁）・預估餘額：本月是基金目前實際總資產${planUS ? "" : "（不含股票）"} ${fmt(Math.round(now))}，之後每月加上目標、扣購屋款、加其他收入・🧱 = 頭期款／工程款・🏠 = 交屋・改計畫到 Notion「📈 購屋現金流計畫」</span>
+    <span class="fresh">預估餘額：本月是基金目前實際總資產${planUS ? "" : "（不含股票）"} ${fmt(Math.round(now))}，之後每月加上目標、扣購屋款、加其他收入・🧱 = 頭期款／工程款・🏠 = 交屋・改計畫到 Notion「📈 購屋現金流計畫」</span>
   </section>`; }
 }
 
