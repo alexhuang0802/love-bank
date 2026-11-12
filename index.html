@@ -1233,7 +1233,7 @@ const goalOf = ym => ym < "2027-06" ? 90000 : ym < "2028-06" ? 95000 : 100000;  
 const ymOf = d => `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 const ymLabel = k => `${k.slice(0, 4)}/${Number(k.slice(5))}`;
 let planAll = false;
-let planUS = (() => { try { return localStorage.getItem("lb_plan_us") !== "0"; } catch { return true; } })();   // 預估餘額要不要算美股
+let planUS = (() => { try { return localStorage.getItem("lb_plan_us") !== "0"; } catch { return true; } })();   // 資產要不要算股票（台股＋美股）
 const CHALLENGE_START = "2026-12";   // 存錢關卡從這個月開始算（11 月付頭期款，不用存）
 const HOUSE_TAGS = ["房貸", "房貸還款", "購屋", "購屋支出", "頭期款", "工程款", "交屋款"];   // 購屋支出不算進關卡
 function actualNet(bm, k) {   // 收入扣開帳；支出不算投資（算存下來的錢）也不算購屋支出（另外照計畫付）
@@ -1261,7 +1261,7 @@ function planSection() {
   // 目前存錢進度：從開始挑戰累計到本月，實際存的 ÷ 目標加總 − 1（例：目標 9 萬存了 18 萬＝超前 100%）
   const started = cur >= CHALLENGE_START;
   const months = plan.map(r => r.ym).filter(k => k >= CHALLENGE_START && k <= cur);
-  const usValue = (FUND.stocks ?? []).filter(x => x.market === "美股").reduce((t, x) => t + (x.value ?? 0), 0);
+  const usValue = (FUND.stocks ?? []).reduce((t, x) => t + (x.value ?? 0), 0);   // 股票市值（台股＋美股）
   const now = (FUND.total ?? 0) - (planUS ? 0 : usValue), proj = {};
   // 存錢進度用「餘額」算：現在的資產 − 開始前一個月底的資產（計畫表「月底資產」） = 存下來的錢；
   // 購屋款（有記在 Notion 的購屋支出／房貸）加回來、計畫裡的其他收入扣掉，不算在存錢裡
@@ -1296,10 +1296,10 @@ function planSection() {
     ${usToggle()}
     <div class="progress-row"><span class="label">目前存錢進度</span>
       <span class="progress-pct ${progress >= 0 ? "plus" : "minus"}">${progress >= 0 ? "超前" : "落後"} ${Math.abs(progress).toFixed(1)}%</span></div>
-    <span class="fresh">實際累積 ${fmt(Math.round(sumActual))}／目標累積 ${fmt(Math.round(sumExpect))}（${startBal == null ? `${ymLabel(CHALLENGE_START)} 起到本月的收支` : `現在資產比 ${ymLabel(startRow.ym)} 底多的錢，購屋款不算`}${planUS ? "" : "・不含美股"}）</span>
+    <span class="fresh">實際累積 ${fmt(Math.round(sumActual))}／目標累積 ${fmt(Math.round(sumExpect))}（${startBal == null ? `${ymLabel(CHALLENGE_START)} 起到本月的收支` : `現在資產比 ${ymLabel(startRow.ym)} 底多的錢，購屋款不算`}${planUS ? "" : "・不含股票"}）</span>
     <span class="fresh">門檻：2027/5 前 9 萬・2027/6 起 9.5 萬・2028/6 起 10 萬；有獎金的月份要再加上獎金</span>
   </section>${cashflowSection()}`;
-  function usToggle() { return usValue ? `<div class="seg us-toggle"><button class="${planUS ? "on" : ""}" data-plan-us="1">含美股</button><button class="${planUS ? "" : "on"}" data-plan-us="0">不含美股</button><span class="fresh">美股 ${fmt(Math.round(usValue))}</span></div>` : ""; }
+  function usToggle() { return usValue ? `<div class="seg us-toggle"><button class="${planUS ? "on" : ""}" data-plan-us="1">含股票</button><button class="${planUS ? "" : "on"}" data-plan-us="0">不含股票</button><span class="fresh">股票 ${fmt(Math.round(usValue))}</span></div>` : ""; }
   function cashflowSection() { return `
   <section class="sec">
     <div class="sec-head"><h2>📈 AI 逐月現金流</h2>${moveIn ? `<span class="label">交屋 ${ymLabel(moveIn.ym)}${monthsLeft > 0 ? `・還有 ${monthsLeft} 個月` : ""}</span>` : ""}</div>
@@ -1320,7 +1320,7 @@ function planSection() {
           ${payNote(r, r === moveIn)}</div>`; }).join("")}
     </div>
     <button class="btn ghost" data-plan-all>${planAll ? "只看近 12 個月" : `看之後全部 ${plan.filter(r => r.ym >= cur).length} 個月`}</button>
-    <span class="fresh">目標＝門檻＋當月獎金（🎁）・預估餘額：本月是基金目前實際總資產${planUS ? "" : "（不含美股）"} ${fmt(Math.round(now))}，之後每月加上目標、扣購屋款、加其他收入・🧱 = 頭期款／工程款・🏠 = 交屋・改計畫到 Notion「📈 購屋現金流計畫」</span>
+    <span class="fresh">目標＝門檻＋當月獎金（🎁）・預估餘額：本月是基金目前實際總資產${planUS ? "" : "（不含股票）"} ${fmt(Math.round(now))}，之後每月加上目標、扣購屋款、加其他收入・🧱 = 頭期款／工程款・🏠 = 交屋・改計畫到 Notion「📈 購屋現金流計畫」</span>
   </section>`; }
 }
 

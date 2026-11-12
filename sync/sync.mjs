@@ -98,7 +98,7 @@ const plan = (await queryAll(DS.plan)).map(({ id, properties: p }) => {
   const [y, m] = text(p["月份"]).split("/").map(Number);
   return { ym: `${y}-${String(m).padStart(2, "0")}`, term: num(p["期數"]), salary: num(p["月薪"]) ?? 0, bonus: num(p["獎金"]) ?? 0,
     living: num(p["生活費"]) ?? 0, house: num(p["購屋支出"]) ?? 0, other: num(p["其他收入"]) ?? 0, net: num(p["淨現金流"]) ?? 0, bal: num(p["現金餘額"]) ?? 0,
-    snap: num(p["月底資產"]), snapUS: num(p["月底美股"]), id };
+    snap: num(p["月底資產"]), snapUS: num(p["月底股票"]), id };
 }).filter(r => /^\d{4}-\d{2}$/.test(r.ym)).sort((a, b) => a.ym.localeCompare(b.ym));
 
 const mortgageRows = expense.filter(t => t.tag === "房貸");
@@ -123,10 +123,10 @@ for (const [kind, rows] of [["income", income], ["expense", expense]]) {
     m[k] = (m[k] ?? 0) + Math.abs(t.amount);
   }
 }
-// 美股的收入（例：STRC股利）另外記一份，網銀「不含美股」時可以扣掉
-const usNames = stocks.filter(s => s.market === "美股").map(s => s.name);
+// 股票的收入（股利、或名稱有股票名的，例：STRC股利）另外記一份，網銀「不含股票」時可以扣掉
+const usNames = stocks.map(s => s.name);
 for (const t of income) {
-  if (!t.date || !t.tag || !usNames.some(n => (t.title ?? "").includes(n))) continue;
+  if (!t.date || !t.tag || (t.tag !== "股利" && !usNames.some(n => (t.title ?? "").includes(n)))) continue;
   const m = byMonth[t.date.slice(0, 7)]; m.us = (m.us ?? 0) + Math.abs(t.amount);
 }
 // 「開帳」是一次性的期初資金，算月平均收入時要扣掉（跟記帳網站同一套規則）
@@ -224,11 +224,11 @@ const anniversaries = (await queryAll(DS.anniv)).map(({ properties: p }) => ({
 })).filter(a => a.title && a.date);
 
 // 把目前的總資產寫進計畫表「這個月」那一列；每天覆蓋，月底最後一次同步就是當月的月底資產（網銀拿來算存錢進度）
-const total = cash.balance + stockValue, usValue = stocks.filter(s => s.market === "美股").reduce((t, s) => t + s.value, 0);
+const total = cash.balance + stockValue, usValue = stockValue;
 const curPlan = plan.find(r => r.ym === thisYm);
 if (curPlan) {
   const r = await fetch(`https://api.notion.com/v1/pages/${curPlan.id}`, { method: "PATCH", headers: NOTION_HEADERS,
-    body: JSON.stringify({ properties: { "月底資產": { number: Math.round(total) }, "月底美股": { number: Math.round(usValue) } } }) });
+    body: JSON.stringify({ properties: { "月底資產": { number: Math.round(total) }, "月底股票": { number: Math.round(usValue) } } }) });
   if (r.ok) { curPlan.snap = Math.round(total); curPlan.snapUS = Math.round(usValue); } else console.log("寫入月底資產失敗", r.status);
 }
 for (const r of plan) delete r.id;
