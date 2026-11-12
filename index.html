@@ -1313,7 +1313,8 @@ function planSection() {
         return `<div class="pt-row ${r.ym === cur ? "now" : ""} ${r === moveIn ? "move" : ""}" role="row">
           <span>${ymLabel(r.ym)}${r === moveIn ? " 🏠" : big ? " 🧱" : ""}${r.bonus ? " 🎁" : ""}${r.term && !big ? `<small>房貸${r.term}</small>` : ""}</span>
           <span class="${a == null || !t ? "dim" : a >= t ? "plus" : "minus"}">${a == null ? "—" : fmt(Math.round(a))}</span>
-          <span class="${r.house < 0 ? "minus" : "dim"}">${r.house < 0 ? `−${fmt(-r.house)}` : "—"}</span>
+          ${(() => { const h = r.ym <= cur && houseOf(r.ym) > 0 ? -houseOf(r.ym) : r.house;   // 本月和過去：Notion 有記購屋支出就用實際金額
+            return `<span class="${h < 0 ? "minus" : "dim"}">${h < 0 ? `−${fmt(-h)}` : "—"}</span>`; })()}
           <span class="${r.ym === cur ? "now-bal" : proj[r.ym] < 0 ? "minus" : ""}">${proj[r.ym] == null ? "—" : fmt(Math.round(proj[r.ym]))}</span>
           ${payNote(r, r === moveIn)}</div>`; }).join("")}
     </div>
